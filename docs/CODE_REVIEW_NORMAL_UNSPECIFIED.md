@@ -120,7 +120,7 @@ compose into one chain, and each link is independently confirmed below.
 | Kotlin source | 3,394 LOC across 83 files | n/a | n/a |
 | Modules in `settings.gradle.kts` | 6 | 16 (11 `feature-*`, 4 `core`/shared, plus `ktor-server`) | 10 absent |
 | Feature modules implemented | 1 (`:feature:feature-auth`) | 11 | 10 absent |
-| Room entities | 4 | 26 tables in `docs/modules.md` | 22 absent |
+| Room entities | 4 (`items`, `locations`, `stock_movements`, `users`) | 26 tables in `docs/modules.md` | 3 of 26 exist; 23 absent; `locations` undocumented |
 | Navigable screens with real content | 3 (onboarding, lock, HOTP) | POS, inventory, reports, settings | 4 are `DummyScreen` placeholders |
 | PIN storage | plaintext | hashed (column is named `pinHash`) | not met |
 | Hashing primitives in repo | 0 | at least one | not met |
@@ -892,3 +892,741 @@ of shipped behaviour is lower than the count suggests.
 **Fix.** Add a Room instrumented test module for `:core:core-data` and unit tests
 for the auth view models, and wire both into the CI workflow from
 [H10](#h10-there-is-no-ci-and-the-readme-advertises-a-badge-for-a-workflow-that-does-not-exist).
+
+---
+
+## Medium findings
+
+### M1. The release build cannot succeed: `proguard-rules.pro` does not exist
+
+`android-app/build.gradle.kts:36-40` enables minification and names a rules file:
+
+```kotlin
+release {
+    isMinifyEnabled = true
+    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+}
+```
+
+A search for any path matching `proguard*` in the repository returns nothing.
+The release build therefore fails on a missing file. Separately, once the file
+exists it will need keep rules for Room entities and the reflective enum access
+in [M4](#m4-roleconverter-crashes-on-any-unrecognised-role-value), because R8
+will otherwise rename the enum constants that `enumValueOf` looks up by name.
+
+**Fix.** Add `android-app/proguard-rules.pro`, even if initially empty, and build
+a release variant in CI so this is caught.
+
+### M2. Build flavors are declared but no flavor source sets exist
+
+Three flavors are declared (`android-app/build.gradle.kts:21-34`): `github`,
+`fdroid`, and `playstore`. `android-app/src/` contains exactly one directory:
+`main`.
+
+`CONTEXT.md:166-168` instructs contributors to use flavor-specific Hilt modules
+in `:android-app/src/<flavorName>/` and gives `src/github/GitHubUpdateModule.kt`
+as the example. No such directory or file exists. So the flavor mechanism that
+the three non-negotiables depend on for keeping proprietary code out of `fdroid`
+is declared but not usable, and the documented `UpdateChecker` bindings
+(`GitHubUpdateChecker`, `NoOpUpdateChecker`) do not exist in any form.
+
+### M3. The app updater ships in the F-Droid flavor, violating a stated non-negotiable
+
+`CONTEXT.md:164` states that the `kmp-app-updater` dependency must never be
+added to the `fdroid` flavor. It is declared in
+`shared-kmp/build.gradle.kts:23`, inside `commonMain.dependencies`:
+
+```kotlin
+commonMain.dependencies {
+    ...
+    implementation(libs.kmp.app.updater.core)
+}
+```
+
+`commonMain` is compiled into every target and every consumer, so the dependency
+is present in all three flavors including `fdroid`. This is a direct breach of
+the third non-negotiable as the project itself defines it. The dependency is also
+currently unused by any Kotlin source, so nothing is lost by removing it now.
+
+F-Droid compliance is otherwise good: there is no Firebase, no Google Play
+Services, and no committed API key or secret anywhere in the repository. This
+single dependency is the only breach found.
+
+### M4. `RoleConverter` crashes on any unrecognised role value
+
+`core/core-data/.../converters/RoleConverter.kt:8`:
+
+```kotlin
+@TypeConverter
+fun toRole(value: String): Role = enumValueOf<Role>(value)
+```
+
+`enumValueOf` throws `IllegalArgumentException` for any value not matching a
+constant, and there is no fallback. Any unexpected string in the `role` column
+crashes on read rather than degrading to a least-privileged default.
+
+This is more than theoretical here, for two reasons. First, the role enum was
+renamed from `WAITER` to `CREW` (ADR-009), and the dead enum in
+`shared/models/Role.kt` still contains `WAITER`
+([H5](#h5-duplicate-parallel-domain-hierarchies-the-adr-canonical-interfaces-are-the-dead-ones)),
+so a `WAITER` row is a realistic input. Second, once sync exists, role strings
+will arrive from other devices possibly running other versions, which is exactly
+where unknown enum values come from.
+
+**Fix.** Return a safe default and log, for example
+`enumValues<Role>().firstOrNull { it.name == value } ?: Role.CASHIER`, choosing
+the least-privileged role rather than the most.
+
+### M5. The documented product is roughly ten times the implemented one
+
+The documentation describes a system substantially larger than what exists. This
+is normal for design documents, but here the documents are written in the present
+indicative, as descriptions of what the code does, not as plans.
+
+| Documented | Exists |
+|---|---|
+| 11 `feature-*` modules | 1 (`:feature:feature-auth`) |
+| `ktor-server` Gradle project | absent |
+| `:shared-kmp/sync-contracts` source set | absent |
+| 26 Room tables (`docs/modules.md`) | 3 of those 26 |
+| `PaymentGateway`, `CaptureOnlyGateway` | absent |
+| `ReceiptEmailSender`, `IntentEmailSender` | absent |
+| `PrinterService` | absent |
+| `UpdateChecker` implementations | absent |
+
+`docs/modules.md` is the clearest case: 511 lines documenting per-module
+ownership, permissions checked, and Room tables for ten modules that do not
+exist. It also does not document `locations`, which is one of the four tables
+that does exist and the one with the foreign key everything else depends on.
+
+**Fix.** Mark unimplemented documentation explicitly. A one-line status banner at
+the top of each such file ("Design target, not yet implemented as of 0.1-alpha")
+would resolve almost all of the documentation findings in this review at very low
+cost, and is much cheaper than either deleting the design work or implementing it.
+
+### M6. The three backend setup guides describe infrastructure that does not exist
+
+`docs/setup-tier1.md`, `docs/setup-supabase.md`, and `docs/setup-appwrite.md`
+give step-by-step instructions for configuring sync backends. None of the code
+they reference exists: there is no Supabase or Appwrite backend implementation,
+no `SyncBackend` variant beyond `NoSyncBackend`, and no settings screen to select
+one, since settings is a `DummyScreen`. `docs/setup-supabase.md:84` contains SQL
+for a `users` table with a `role` column commented as
+`OWNER, MANAGER, CASHIER, CREW`, which is a schema for a server that does not
+exist in this repository.
+
+A user following any of these guides end to end cannot reach a working outcome.
+These are the highest-risk documents in the repository from a user-trust
+perspective, because they read as operational runbooks rather than as design
+notes.
+
+### M7. ADR compliance is partial, and four ADRs have no implementation at all
+
+Of the 18 ADRs, this review found roughly 68 of 180 individual technical claims
+currently true. ADR-006 (GPL v3 licence), ADR-007, ADR-015 (payment gateway), and
+ADR-017 have no corresponding implementation whatsoever. ADR-002's `BigDecimal`
+requirement is contradicted by the code
+([H7](#h7-inventory-stock-is-accumulated-in-double-contradicting-adr-002)), and
+ADR-005's documented HOTP look-ahead window of 10 is implemented as 5
+([M8](#m8-hotp-validation-is-timing-unsafe-permits-replay-and-uses-the-wrong-window)).
+
+ADR-006 is the notable one: an entire decision record justifying GPL v3, with no
+licence file in the repository
+([C3](#c3-a-gpl-v3-project-ships-no-license-file)).
+
+### M8. HOTP validation is timing-unsafe, permits replay, and uses the wrong window
+
+The HOTP code generation itself is correct. It was checked against the RFC 4226
+Appendix D test vectors and matches, and the tests assert those vectors, which is
+exactly right. `validateCode` has three problems
+(`shared-kmp/.../HOTPGenerator.kt:32-47`):
+
+1. **Timing-unsafe comparison.** `generated == inputCode` is `String.equals`,
+   which short-circuits on the first differing character.
+2. **No consumption, so codes replay.** The function returns the matched counter
+   but nothing persists it or advances the stored counter. A manager override code
+   therefore remains valid indefinitely and can be reused any number of times.
+   RFC 4226 requires the counter to advance on successful validation. This is the
+   most serious of the three: an override code shared once with a cashier keeps
+   working forever.
+3. **Window is 5, ADR-005 documents 10** (`ADR-005:48` and `:86`). The parameter
+   default is `lookAheadWindow: Int = 5`.
+
+Because `validateCode` has no production call sites
+([H3](#h3-rbac-manager-approval-and-hotp-validation-are-entirely-dead-code)),
+none of this is currently exploitable. All three should be fixed before it is
+wired up.
+
+### M9. `minSdk` is 24, but the documentation states API 26
+
+`CONTEXT.md:17` states a minimum SDK of API 26. Every module sets `minSdk = 24`
+(`android-app/build.gradle.kts:16`, `core-data`, `core-ui`, `core-network`,
+`feature-auth`, and `shared-kmp/build.gradle.kts:12`).
+
+This is worth resolving deliberately rather than by picking one. API 24 and 25
+lack some keystore behaviour that `KeystoreManager` relies on for stronger
+guarantees, and the documented 26 was very likely chosen for that reason. Either
+raise `minSdk` to 26 to match the security assumption, or lower the documented
+figure and verify the keystore code paths on API 24.
+
+`targetSdk = 34` alongside `compileSdk = 36` is also inconsistent with
+`CONTEXT.md:18` ("latest stable"), and `tools:targetApi="31"` in the manifest
+matches neither.
+
+### M10. No `DATABASE_VERSION` constant, and one schema version has no schema change
+
+`CONTEXT.md:180-181` instructs contributors to increment `DATABASE_VERSION` in
+`KaupDatabase` on every entity change. No such constant exists. The version is
+an inline literal (`KaupDatabase.kt:26`):
+
+```kotlin
+version = 4,
+```
+
+The exported schemas show a version bump with no schema change: `2.json` and
+`3.json` have **identical** `identityHash` values
+(`d0aaa1cc13fbac7563053865aa1b0a5d`), meaning version 3 differs from version 2 in
+no way that Room can detect. This is harmless under the current destructive
+migration policy but would produce a migration with nothing to migrate later.
+
+Schemas are also exported to `core/core-data/schemas/`, not `/app/schemas/` as
+`CONTEXT.md:184` states.
+
+### M11. No `res/` directory and no `strings.xml`, so localisation is blocked
+
+There is no `res/` directory and no `strings.xml` anywhere in the repository.
+`CONTEXT.md` lists "do not write user-facing strings as hardcoded literals, use
+`strings.xml`" in its "what not to do" section, and `CONTRIBUTING.md` has a
+translation-contributions section. Every user-facing string in the app is
+currently a hardcoded Kotlin literal, so there is nothing for a translator to
+translate.
+
+Fixing this early is much cheaper than later: extracting strings after the POS,
+inventory, and reports screens are written is a large mechanical change across
+every composable, whereas establishing the pattern now costs almost nothing.
+
+### M12. `CONTEXT.md` contradicts itself on `:core-network` dependencies
+
+`CONTEXT.md:39-40` describes `:core-network` as depending on `:shared-kmp` and
+`:core-data`. `CONTEXT.md:80` states the rule that `core-*` modules may import
+`:shared-kmp` **only**. Those two statements cannot both hold, and
+`:core-network` does in fact depend on `:core-data`.
+
+This matters because it is the architecture contract, and the module-boundary
+rule is one of the three non-negotiables. A contributor cannot follow a rule that
+contradicts the example beside it. Resolve by stating the intended exception
+explicitly.
+
+### M13. Broken documentation links
+
+- `docs/adr/ADR-015-payment-gateway-architecture.md.md` has a doubled `.md`
+  extension. `README.md:156` links the single-extension name, so the link 404s.
+- `README.md:9`, `README.md:184`, and `README.md:187` all link `LICENSE`, which
+  does not exist ([C3](#c3-a-gpl-v3-project-ships-no-license-file)).
+- The README CI badge points at a workflow that does not exist
+  ([H10](#h10-there-is-no-ci-and-the-readme-advertises-a-badge-for-a-workflow-that-does-not-exist)).
+
+---
+
+## Low findings
+
+### L1. `KeystoreManager` could take two further hardening steps
+
+`core/core-data/.../crypto/KeystoreManager.kt` is the strongest code in the
+repository (see [what is already good](#what-is-already-good)). Two optional
+improvements, neither a defect:
+
+- `setUserAuthenticationRequired(true)` would bind key use to device
+  authentication, so keys cannot be used while the device is locked.
+- `setIsStrongBoxBacked(true)`, guarded by a feature check and fallback, would use
+  hardware-isolated key storage where available.
+
+### L2. Placeholder application resources, and no `FLAG_SECURE`
+
+`AndroidManifest.xml:8-11` uses framework placeholders rather than app resources:
+
+```xml
+android:icon="@android:drawable/sym_def_app_icon"
+android:theme="@android:style/Theme.NoTitleBar"
+```
+
+Expected at alpha, and it follows from having no `res/` directory
+([M11](#m11-no-res-directory-and-no-stringsxml-so-localisation-is-blocked)).
+Separately, no window sets `FLAG_SECURE`, so the PIN entry screen and any future
+payment screen appear in the system recents screenshot and in screen recordings.
+`FLAG_SECURE` on the lock screen is a one-line change worth making alongside
+[C1](#c1-the-user-pin-is-stored-and-compared-in-plaintext-in-a-column-named-pinhash).
+
+### L3. Code hygiene: 8 non-null assertions, `println` instead of logging
+
+Measured across all 83 Kotlin files:
+
+| Pattern | Count |
+|---|---|
+| `!!` non-null assertions | 8 |
+| `println` | 2 |
+| `TODO` comments | 2 |
+| `Log.*` calls | **0** |
+
+The notable line is the last one: there is no logging in the application at all,
+and the only diagnostic output is two `println` calls, which do not reach logcat
+usefully on Android. Establishing a small logging abstraction in `:core-data` or
+`:shared-kmp` now is worth more than it appears, because the offline-first sync
+engine is not debuggable without one.
+
+### L4. Two of fourteen commits follow the project's own commit format
+
+`CONTRIBUTING.md:162-175` mandates the format `type(scope): short description`
+followed by a `Closes #123` footer. Exactly 2 of the 14 commits carry the footer.
+
+Scope usage also drifts from the documented list: several commits use multiple
+comma-separated scopes, for example
+`feat(core-data, shared-kmp, feature-auth): implement session management and RBAC`,
+where the specification calls for a single module name. One commit
+(`feat(feature-auth, android-app): implement lock screen UI and DI setup`) has its
+entire body collapsed onto the subject line as a run of hyphenated bullets, and
+one subject appears twice in consecutive commits
+(`feat(android-app): implement app shell, flavors, and adaptive navigation`).
+
+Low severity, but worth fixing now via a commit-message hook or a CI check, since
+the history is only 14 commits long and the convention is already written down.
+
+### L5. Five dependency coordinates bypass the version catalog
+
+`gradle/libs.versions.toml` is well organised and used consistently almost
+everywhere, which makes the exceptions stand out. For example
+`shared-kmp/build.gradle.kts:28`:
+
+```kotlin
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+```
+
+This pins a version outside the catalog, so a catalog-wide coroutines upgrade
+will leave it behind and can produce a version skew between the main and test
+classpaths. Move these into the catalog.
+
+### L6. `detectNegativeStockViolations` reports only the crossing event
+
+Covered in [H8](#h8-conflictresolver-contains-no-conflict-resolution) and noted
+here for the index: the guard
+`if (previousStock >= 0.0 && currentStock < 0.0)` flags only the movement that
+crosses zero, so further oversells while stock is already negative are not
+reported.
+
+---
+
+## What is already good
+
+This section is not filler. Several things here are done better than is typical,
+and the remediation plan depends on them.
+
+**`KeystoreManager` is genuinely well written.** AES-256-GCM, a fresh random IV
+per encryption, keys generated in and never leaving the Android keystore, and
+critically **no plaintext fallback path**. Many first attempts at keystore code
+include a "if the keystore is unavailable, store it in plaintext" branch, which
+silently destroys the guarantee. This one does not. It is also, ironically, most
+of what is needed to fix
+[C2](#c2-the-database-is-not-encrypted-contradicting-two-explicit-documentation-claims).
+
+**HOTP generation is correct.** The implementation matches the RFC 4226 Appendix
+D test vectors, and the test suite asserts those published vectors rather than
+asserting whatever the implementation happens to produce. That is the right way
+to test a standardised algorithm and it is frequently done wrong.
+
+**`ConflictResolver.sortDeterministically` is the right idea.** Ordering by
+timestamp, then `deviceId`, then `id` produces a stable total order across
+devices without coordination, which is precisely what an offline-first
+multi-device system needs. The problem is that the rest of the class does not
+build on it, not the ordering itself.
+
+**`Money` as a `value class` over `Long` minor units is the correct choice.**
+Floating-point currency is one of the most common and most damaging mistakes in
+POS software, and the author avoided it in the type. The findings in
+[H6](#h6-money-arithmetic-is-routed-through-double-and-the-totals-do-not-reconcile)
+are about arithmetic performed around `Money`, not about `Money` itself.
+
+**The module structure is sound and the boundaries are actually respected.** With
+the single exception noted in [M12](#m12-contextmd-contradicts-itself-on-core-network-dependencies),
+which is a documentation contradiction rather than a code violation, no
+`feature-*` module imports another, and `:shared-kmp` contains no `android.*` or
+`androidx.*` imports. Two of the three non-negotiables are being followed in the
+code. Getting KMP boundary discipline right this early is uncommon.
+
+**The Gradle version catalog is well organised** and used consistently, with only
+the five exceptions in [L5](#l5-five-dependency-coordinates-bypass-the-version-catalog).
+
+**Writing down the architecture contract at all is the best decision in the
+repository.** `CONTEXT.md` is why this review could measure the project against
+its own intent rather than against outside preference. Most of the findings above
+are gaps between `CONTEXT.md` and the code, which is only possible to state
+because `CONTEXT.md` exists and is specific.
+
+**F-Droid discipline is real.** No Firebase, no Google Play Services, no
+committed secrets. The single breach
+([M3](#m3-the-app-updater-ships-in-the-f-droid-flavor-violating-a-stated-non-negotiable))
+is an unused dependency in the wrong source set.
+
+---
+
+## Remediation plan
+
+Ordered so that each stage makes the next one safer. Stage 0 is deliberately tiny
+and should land as one PR.
+
+### Stage 0: stop the bleeding (hours, one PR)
+
+1. Commit the GPL v3 `LICENSE` file
+   ([C3](#c3-a-gpl-v3-project-ships-no-license-file)). Five minutes, removes the
+   legal defect, unblocks F-Droid.
+2. `git update-index --chmod=+x gradlew`
+   ([H2](#h2-gradlew-is-committed-non-executable-so-every-documented-build-command-fails)).
+3. Set `android:allowBackup="false"`
+   ([C6](#c6-allowbackuptrue-makes-the-plaintext-database-and-pin-extractable)).
+4. Make the PIN length bounds agree
+   ([C5](#c5-a-5-or-6-digit-pin-permanently-locks-the-owner-out-of-the-app)).
+5. Amend `CONTEXT.md:20` and `README.md:23` to stop claiming encryption until it
+   exists ([C2](#c2-the-database-is-not-encrypted-contradicting-two-explicit-documentation-claims)).
+   Withdrawing a false security claim is urgent; implementing it is not.
+
+### Stage 1: make the project verifiable (days)
+
+6. Add `alias(libs.plugins.kotlin.android)` to the five Android modules and
+   confirm the tree builds
+   ([C4](#c4-no-module-applies-the-kotlin-android-plugin)). Do this before
+   anything else in this stage, since nothing below can be verified otherwise.
+7. Add `android-app/proguard-rules.pro`
+   ([M1](#m1-the-release-build-cannot-succeed-proguard-rulespro-does-not-exist)).
+8. Add `.github/workflows/ci.yml` running assemble, release assemble, and `test`
+   on pull requests, and point the README badge at it
+   ([H10](#h10-there-is-no-ci-and-the-readme-advertises-a-badge-for-a-workflow-that-does-not-exist)).
+
+### Stage 2: fix the credential chain (days)
+
+9. Replace plaintext PIN storage with a salted KDF, add a migration, and add the
+   test that the stored value differs from the input
+   ([C1](#c1-the-user-pin-is-stored-and-compared-in-plaintext-in-a-column-named-pinhash)).
+10. Add persistent failed-attempt counting and lockout
+    ([H4](#h4-no-rate-limiting-or-lockout-on-pin-entry)).
+11. Encrypt the database with SQLCipher, sealing the passphrase with the existing
+    `KeystoreManager`, then restore the documentation claim removed in step 5
+    ([C2](#c2-the-database-is-not-encrypted-contradicting-two-explicit-documentation-claims)).
+12. Add `FLAG_SECURE` to the lock screen ([L2](#l2-placeholder-application-resources-and-no-flag_secure)).
+
+### Stage 3: remove the ambiguity before building on it (days)
+
+13. Delete one of the two duplicate domain hierarchies and repoint the tests at
+    the surviving implementation
+    ([H5](#h5-duplicate-parallel-domain-hierarchies-the-adr-canonical-interfaces-are-the-dead-ones)).
+14. Seed the default location from a Room callback and add an instrumented test
+    that inserts an item
+    ([H1](#h1-the-default-location-is-never-seeded-while-locationid-is-a-non-null-foreign-key)).
+15. Add `syncStatus` to the three entities missing it, plus a type converter, and
+    `locationId` to `UserEntity`
+    ([H9](#h9-syncstatus-exists-on-one-of-four-room-entities)). Do this inside the
+    destructive-migration window, where it is free.
+16. Give `RoleConverter` a least-privileged fallback
+    ([M4](#m4-roleconverter-crashes-on-any-unrecognised-role-value)).
+17. Move `kmp-app-updater` out of `commonMain`, or remove it while unused
+    ([M3](#m3-the-app-updater-ships-in-the-f-droid-flavor-violating-a-stated-non-negotiable)).
+
+### Stage 4: money and stock correctness (1 to 2 weeks)
+
+18. Write an ADR defining the rounding, tax-presentation, and negative-quantity
+    contract, then fix `SalesCalculator` against it and add the reconciliation
+    property test
+    ([H6](#h6-money-arithmetic-is-routed-through-double-and-the-totals-do-not-reconcile)).
+19. Replace `Double` quantities with scaled integers or `BigDecimal`, and unify
+    the replay ordering between `InventoryEngine` and `ConflictResolver`
+    ([H7](#h7-inventory-stock-is-accumulated-in-double-contradicting-adr-002)).
+20. Decide and implement the conflict-resolution policy, or rename the class to
+    match what it does ([H8](#h8-conflictresolver-contains-no-conflict-resolution)).
+21. Fix HOTP validation: constant-time comparison, counter advance on success,
+    window of 10
+    ([M8](#m8-hotp-validation-is-timing-unsafe-permits-replay-and-uses-the-wrong-window)).
+22. Wire one restricted action through `hasPermission`, `ManagerApprovalOverlay`,
+    and `validateCode` end to end
+    ([H3](#h3-rbac-manager-approval-and-hotp-validation-are-entirely-dead-code)).
+
+### Stage 5: documentation truth and hygiene (ongoing)
+
+23. Add a status banner to every unimplemented design document, and to all three
+    setup guides in particular
+    ([M5](#m5-the-documented-product-is-roughly-ten-times-the-implemented-one),
+    [M6](#m6-the-three-backend-setup-guides-describe-infrastructure-that-does-not-exist)).
+24. Resolve the `CONTEXT.md` self-contradiction and the `WAITER` reference
+    ([M12](#m12-contextmd-contradicts-itself-on-core-network-dependencies)).
+25. Reconcile `minSdk` with the documented API level
+    ([M9](#m9-minsdk-is-24-but-the-documentation-states-api-26)).
+26. Fix the doubled ADR-015 filename and the broken links
+    ([M13](#m13-broken-documentation-links)).
+27. Introduce `res/strings.xml` and extract strings before the POS and inventory
+    screens are written
+    ([M11](#m11-no-res-directory-and-no-stringsxml-so-localisation-is-blocked)).
+28. Add flavor source sets, a `DATABASE_VERSION` constant, a logging
+    abstraction, catalog the stray dependencies, and add a commit-message check
+    ([M2](#m2-build-flavors-are-declared-but-no-flavor-source-sets-exist),
+    [M10](#m10-no-database_version-constant-and-one-schema-version-has-no-schema-change),
+    [L3](#l3-code-hygiene-8-non-null-assertions-println-instead-of-logging),
+    [L5](#l5-five-dependency-coordinates-bypass-the-version-catalog),
+    [L4](#l4-two-of-fourteen-commits-follow-the-projects-own-commit-format)).
+
+---
+
+## Appendix A: reproducing every measurement
+
+All commands are run from the repository root at commit `b7f756e`.
+
+**Repository size and test counts**
+
+```bash
+find . -name "*.kt" -not -path "./.git/*" | wc -l                    # 83
+find . -name "*.kt" -not -path "./.git/*" -exec cat {} + | wc -l     # 3394
+grep -rn "@Test" --include=*.kt . | wc -l                            # 32
+find . -path "*src/*Test*" -name "*.kt" -not -path "./.git/*" \
+  | sed 's|/src/.*||' | sort -u                                      # ./shared-kmp only
+```
+
+**C1: plaintext PIN, and no hashing anywhere**
+
+```bash
+sed -n '88,95p' feature/feature-auth/src/main/kotlin/app/kaup/feature/auth/ui/onboarding/OnboardingViewModel.kt
+sed -n '80,92p' feature/feature-auth/src/main/kotlin/app/kaup/feature/auth/ui/LockScreen.kt
+grep -rn -i "MessageDigest\|bcrypt\|scrypt\|argon\|PBKDF2\|sha256\|hashOf" \
+  --include=*.kt --include=*.kts --include=*.toml .                  # zero matches
+```
+
+**C2: database not encrypted**
+
+```bash
+grep -rn -i "sqlcipher\|zetetic\|SupportFactory\|openHelperFactory\|passphrase" \
+  --include=*.kt --include=*.kts --include=*.toml .                  # zero matches
+cat android-app/src/main/kotlin/app/kaup/android/di/DatabaseModule.kt
+grep -n -i "encrypt" CONTEXT.md README.md
+```
+
+**C3: no LICENSE file**
+
+```bash
+ls -a                                                # no LICENSE entry
+find . -iname "*licen*" -not -path "./.git/*"        # only docs/adr/ADR-006-gpl-v3-license.md
+grep -n -i "licen\|gpl" README.md                    # badge and 3 links to LICENSE
+```
+
+**C4: Kotlin Android plugin never applied**
+
+```bash
+grep -rn "kotlin.android\|kotlin(\"android\")\|org.jetbrains.kotlin.android" \
+  --include=*.kts --include=*.toml .
+# exactly 2 hits: build.gradle.kts:5 (apply false) and libs.versions.toml:46
+
+for f in android-app/build.gradle.kts core/core-data/build.gradle.kts \
+         core/core-ui/build.gradle.kts core/core-network/build.gradle.kts \
+         feature/feature-auth/build.gradle.kts shared-kmp/build.gradle.kts; do
+  echo "--- $f"; sed -n '/^plugins {/,/^}/p' $f
+done
+```
+
+**C5: PIN length mismatch**
+
+```bash
+grep -n "length" feature/feature-auth/src/main/kotlin/app/kaup/feature/auth/ui/onboarding/OnboardingViewModel.kt
+# :30  ownerPin.length >= 4        :56  pin.length <= 6
+grep -n "pin.length" feature/feature-auth/src/main/kotlin/app/kaup/feature/auth/ui/LockScreen.kt
+# :82  if (pin.length == 4)
+```
+
+**C6 and L2: manifest**
+
+```bash
+cat android-app/src/main/AndroidManifest.xml
+grep -rn "FLAG_SECURE" --include=*.kt .              # zero matches
+```
+
+**H1: location never seeded**
+
+```bash
+grep -rn "addCallback\|RoomDatabase.Callback\|createFromAsset" --include=*.kt .
+# zero matches (the onCreate hits are MainActivity's activity lifecycle)
+grep -rn "locationDao\|LocationDao" --include=*.kt . # only declaration, accessor, DI provider
+grep -rn "itemDao\|stockMovementDao" --include=*.kt . \
+  | grep -v "di/DatabaseModule\|KaupDatabase.kt"     # zero consumers
+grep -n "locationId\|ForeignKey" core/core-data/src/main/kotlin/app/kaup/core/data/entities/ItemEntity.kt
+```
+
+**H2: gradlew file mode**
+
+```bash
+git ls-files --stage gradlew                         # 100644, expected 100755
+```
+
+**H3: dead RBAC and HOTP**
+
+```bash
+grep -rn "ManagerApprovalOverlay" --include=*.kt .   # definition only
+grep -rn "hasPermission" --include=*.kt .            # definitions only
+grep -rn "validateCode" --include=*.kt .             # definition plus 4 test references
+```
+
+**H5: duplicate hierarchies**
+
+```bash
+grep -rn "import app.kaup.shared.*\(Permission\|Role\)" --include=*.kt core feature android-app \
+  | sed 's/.*import/import/' | sort | uniq -c | sort -rn
+# 5 domain.models.auth.Permission, 3 domain.models.auth.Role, 1 getDefaultPermissions
+grep -rn "RoleDefaults" --include=*.kt .             # definition only, zero call sites
+grep -rn "WAITER\|CREW" --include=*.kt --include=*.md .
+grep -rn "SyncBackend" --include=*.kt core android-app  # all use shared.sync.SyncBackend
+```
+
+**H7: floating-point stock, verified by execution**
+
+```bash
+python3 -c "
+def compute(m):
+    acc=0.0
+    for d,q in m: acc = acc+q if d=='IN' else acc-q
+    return acc
+print(repr(compute([('IN',0.1),('IN',0.1),('IN',0.1),('OUT',0.3)])))
+print(repr(compute([('IN',0.1),('OUT',0.3),('IN',0.1),('IN',0.1)])))
+print(repr(compute([('IN',0.7),('IN',0.1),('OUT',0.8)])))
+"
+# 5.551115123125783e-17
+# 2.7755575615628914e-17   (same movements, different order, different result)
+# -1.1102230246251565e-16  (balanced ledger reported as negative stock)
+```
+
+**H9: syncStatus coverage**
+
+```bash
+grep -rn "syncStatus" --include=*.kt .               # 2 matches only
+grep -rn "tableName" --include=*.kt core/core-data   # items, locations, stock_movements, users
+```
+
+**H10 and H11: no CI, no Android tests**
+
+```bash
+ls .github/                                          # ISSUE_TEMPLATE, pull_request_template.md
+find . -name "*.yml" -path "*workflows*"             # nothing
+```
+
+**M1, M2, M3: build configuration**
+
+```bash
+find . -name "proguard*" -not -path "./.git/*"       # nothing
+sed -n '20,45p' android-app/build.gradle.kts         # 3 flavors, isMinifyEnabled = true
+ls android-app/src/                                  # main only
+sed -n '18,26p' shared-kmp/build.gradle.kts          # updater in commonMain
+```
+
+**M5: documented versus actual tables**
+
+```bash
+python3 - <<'PY'
+import re
+lines=open('docs/modules.md').read().split('\n')
+tables=set(); cur=None
+for l in lines:
+    if l.startswith('### Room tables'): cur=True; continue
+    if l.startswith('#'): cur=None if not l.startswith('####') else cur
+    if cur: tables.update(re.findall(r'`([a-z][a-z0-9_]*)`', l))
+print(len(tables), sorted(tables))
+PY
+# 26 documented; only items, stock_movements, users exist; locations is undocumented
+```
+
+**M10: schema versions**
+
+```bash
+python3 -c "
+import json,glob
+for f in sorted(glob.glob('core/core-data/schemas/*/*.json')):
+    d=json.load(open(f)); print(f, d['database']['identityHash'])
+"
+# 2.json and 3.json share identityHash d0aaa1cc13fbac7563053865aa1b0a5d
+```
+
+**M11 and L3: resources and hygiene**
+
+```bash
+find . -name "strings.xml" -o -type d -name "res" -not -path "./.git/*"   # nothing
+grep -rn '!!' --include=*.kt . | wc -l               # 8
+grep -rn 'println' --include=*.kt . | wc -l          # 2
+grep -rn 'TODO' --include=*.kt . | wc -l             # 2
+grep -rn 'Log\.' --include=*.kt . | wc -l            # 0
+```
+
+**L4: commit format**
+
+```bash
+git log --format="%H" | while read h; do git log -1 --format="%b" $h; done \
+  | grep -ci "closes #"                              # 2 of 14
+```
+
+**Build verification was not possible**
+
+```bash
+which java javac gradle                              # not found
+echo "$ANDROID_HOME $ANDROID_SDK_ROOT"               # both unset
+```
+
+---
+
+## Appendix B: finding index by severity
+
+### Critical (6)
+
+| ID | Finding |
+|---|---|
+| [C1](#c1-the-user-pin-is-stored-and-compared-in-plaintext-in-a-column-named-pinhash) | PIN stored and compared in plaintext in a column named `pinHash` |
+| [C2](#c2-the-database-is-not-encrypted-contradicting-two-explicit-documentation-claims) | Database not encrypted, contradicting `CONTEXT.md` and `README.md` |
+| [C3](#c3-a-gpl-v3-project-ships-no-license-file) | GPL v3 project ships no LICENSE file |
+| [C4](#c4-no-module-applies-the-kotlin-android-plugin) | No module applies the Kotlin Android plugin |
+| [C5](#c5-a-5-or-6-digit-pin-permanently-locks-the-owner-out-of-the-app) | A 5 or 6 digit PIN permanently locks the owner out |
+| [C6](#c6-allowbackuptrue-makes-the-plaintext-database-and-pin-extractable) | `allowBackup="true"` exposes the plaintext database and PIN |
+
+### High (11)
+
+| ID | Finding |
+|---|---|
+| [H1](#h1-the-default-location-is-never-seeded-while-locationid-is-a-non-null-foreign-key) | Default location never seeded while `locationId` is a non-null FK |
+| [H2](#h2-gradlew-is-committed-non-executable-so-every-documented-build-command-fails) | `gradlew` committed non-executable |
+| [H3](#h3-rbac-manager-approval-and-hotp-validation-are-entirely-dead-code) | RBAC, manager approval, and HOTP validation are dead code |
+| [H4](#h4-no-rate-limiting-or-lockout-on-pin-entry) | No rate limiting or lockout on PIN entry |
+| [H5](#h5-duplicate-parallel-domain-hierarchies-the-adr-canonical-interfaces-are-the-dead-ones) | Duplicate domain hierarchies; the tested one is dead |
+| [H6](#h6-money-arithmetic-is-routed-through-double-and-the-totals-do-not-reconcile) | Money arithmetic via `Double`; totals do not reconcile |
+| [H7](#h7-inventory-stock-is-accumulated-in-double-contradicting-adr-002) | Stock accumulated in `Double`, contradicting ADR-002 |
+| [H8](#h8-conflictresolver-contains-no-conflict-resolution) | `ConflictResolver` contains no conflict resolution |
+| [H9](#h9-syncstatus-exists-on-one-of-four-room-entities) | `syncStatus` on one of four Room entities |
+| [H10](#h10-there-is-no-ci-and-the-readme-advertises-a-badge-for-a-workflow-that-does-not-exist) | No CI, and the README badge points at a missing workflow |
+| [H11](#h11-zero-tests-in-all-four-android-modules) | Zero tests in all four Android modules |
+
+### Medium (13)
+
+| ID | Finding |
+|---|---|
+| [M1](#m1-the-release-build-cannot-succeed-proguard-rulespro-does-not-exist) | Release build cannot succeed: `proguard-rules.pro` missing |
+| [M2](#m2-build-flavors-are-declared-but-no-flavor-source-sets-exist) | Flavors declared but no flavor source sets exist |
+| [M3](#m3-the-app-updater-ships-in-the-f-droid-flavor-violating-a-stated-non-negotiable) | App updater ships in the F-Droid flavor |
+| [M4](#m4-roleconverter-crashes-on-any-unrecognised-role-value) | `RoleConverter` crashes on an unrecognised role |
+| [M5](#m5-the-documented-product-is-roughly-ten-times-the-implemented-one) | Documented product is roughly ten times the implemented one |
+| [M6](#m6-the-three-backend-setup-guides-describe-infrastructure-that-does-not-exist) | Three setup guides describe non-existent infrastructure |
+| [M7](#m7-adr-compliance-is-partial-and-four-adrs-have-no-implementation-at-all) | ADR compliance partial; four ADRs unimplemented |
+| [M8](#m8-hotp-validation-is-timing-unsafe-permits-replay-and-uses-the-wrong-window) | HOTP validation timing-unsafe, replayable, wrong window |
+| [M9](#m9-minsdk-is-24-but-the-documentation-states-api-26) | `minSdk` 24 versus documented API 26 |
+| [M10](#m10-no-database_version-constant-and-one-schema-version-has-no-schema-change) | No `DATABASE_VERSION`; one schema bump has no change |
+| [M11](#m11-no-res-directory-and-no-stringsxml-so-localisation-is-blocked) | No `res/` or `strings.xml`; localisation blocked |
+| [M12](#m12-contextmd-contradicts-itself-on-core-network-dependencies) | `CONTEXT.md` contradicts itself on `:core-network` |
+| [M13](#m13-broken-documentation-links) | Broken documentation links |
+
+### Low (6)
+
+| ID | Finding |
+|---|---|
+| [L1](#l1-keystoremanager-could-take-two-further-hardening-steps) | `KeystoreManager` hardening opportunities |
+| [L2](#l2-placeholder-application-resources-and-no-flag_secure) | Placeholder resources, no `FLAG_SECURE` |
+| [L3](#l3-code-hygiene-8-non-null-assertions-println-instead-of-logging) | 8 `!!`, `println` instead of logging, no `Log.*` |
+| [L4](#l4-two-of-fourteen-commits-follow-the-projects-own-commit-format) | 2 of 14 commits follow the project's commit format |
+| [L5](#l5-five-dependency-coordinates-bypass-the-version-catalog) | Five dependencies bypass the version catalog |
+| [L6](#l6-detectnegativestockviolations-reports-only-the-crossing-event) | `detectNegativeStockViolations` reports only the crossing event |
+
+**Total: 36 findings (6 Critical, 11 High, 13 Medium, 6 Low).**
