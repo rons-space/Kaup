@@ -74,27 +74,31 @@ A stated.
 | Category | Count |
 |---|---|
 | Findings in the merged list | **46** |
-| Found by all three reviews | 8 |
-| Found by exactly two reviews | 16 |
-| Found by one review only | 22 |
-| Contributed by A alone | 13 |
-| Contributed by B alone | 8 |
-| Contributed by C alone | 1 |
+| Found by all three reviews | 12 |
+| Found by exactly two reviews | 19 |
+| Found by one review only | 15 |
+| Contributed by A alone | 6 |
+| Contributed by B alone | 7 |
+| Contributed by C alone | 2 |
 | Direct factual conflicts between reviews | 6 (resolved below) |
 
 Severity totals after merge: **6 Critical, 15 High, 16 Medium, 9 Low.**
 
-The eight findings all three reviews independently identified are the ones to
-fix first, in this order of agreement strength:
+The twelve findings all three reviews independently identified are the ones to
+fix first, listed by severity:
 
 1. **C1** plaintext PIN in a column named `pinHash`
 2. **C2** database not encrypted despite the documentation claim
-3. **C6** `allowBackup="true"` completing the extraction chain
-4. **H4** no brute-force protection on PIN entry
+3. **C5** a 5 or 6 digit PIN permanently locks the owner out of the app
+4. **C6** `allowBackup="true"` completing the extraction chain
 5. **H3** RBAC, manager approval, and HOTP validation not wired to anything
-6. **H5** duplicate parallel domain hierarchies, with the tested side dead
-7. **M3** `kmp-app-updater` shipping into the F-Droid flavor
-8. **M8** HOTP validation is timing-unsafe, replayable, and uses the wrong window
+6. **H4** no brute-force protection on PIN entry
+7. **H5** duplicate parallel domain hierarchies, with the tested side dead
+8. **H9** `syncStatus` exists on one of four Room entities
+9. **H11** zero tests outside `:shared-kmp`
+10. **M3** `kmp-app-updater` shipping into the F-Droid flavor
+11. **M8** HOTP validation is timing-unsafe, replayable, wrong window
+12. **M11** no `res/` directory and no `strings.xml`, so localisation is blocked
 
 ---
 
@@ -579,7 +583,7 @@ would have caught three of the five problems above.
 `ConflictResolver.detectNegativeStockViolations`. ADR-002 specifies `BigDecimal`.
 A verified the consequences by executing the same IEEE-754 arithmetic:
 
-```
+```text
 Ledger: receive 0.1, receive 0.1, receive 0.1, sell 0.3   (exactly balanced)
 computeStock result:  5.551115123125783e-17     == 0.0 ? False
 
@@ -651,7 +655,7 @@ what it currently is, and correct `CONTEXT.md`.
 WorkManager detecting `PENDING` rows. A repository-wide search returns two
 matches, re-verified at `ef89f62`:
 
-```
+```text
 core/core-data/.../entities/LocationEntity.kt:13:    val syncStatus: String = "PENDING"
 shared-kmp/.../models/StockMovement.kt:26:            val syncStatus: SyncStatus = SyncStatus.PENDING
 ```
@@ -700,7 +704,7 @@ rules that the project calls non-negotiable.
 same workflow. This is the highest-leverage single change in this document,
 because it converts most of the other findings from invisible to self-reporting.
 
-### H11. Zero tests in all four Android modules
+### H11. Zero tests in all five Android modules
 
 **Sources: A (H11), B (§2 test-quality note), C (test-coverage note).**
 
@@ -817,25 +821,34 @@ does not by itself describe an exploitable exposure.
 everything unimplemented into an explicitly labelled "planned" section, and do it
 in the same commit as the **C2** documentation withdrawal.
 
-### H15. The toolchain versions are unverifiable and badly skewed
+### H15. The toolchain versions are badly skewed and the build is unproven
 
 **Sources: B (§5) only.** New to the merged list. Related to **C4**, which is
 about a missing plugin rather than versions.
 
 `gradle/libs.versions.toml` pins `agp = "9.2.0"` and `hilt = "2.59.2"`, and the
-wrapper uses `gradle-9.5.0`. None could be confirmed as real stable releases
-during either review, and they sit alongside Kotlin 2.1.0 and compose-bom
-2024.09.02, which is a badly skewed combination. Combined with **C4** (no Kotlin
+wrapper uses `gradle-9.5.0`. B could not confirm these during its own review,
+but all three are real published releases: AGP 9.2.0 (April 2026, requires
+Gradle 9.4.1 or newer), Gradle 9.5.0 (28 April 2026), and Hilt 2.59.2
+(20 February 2026). So the "unverifiable" half of B's finding does not stand,
+and the versions are internally consistent with each other.
+
+What does stand is the skew: that 2026 build toolchain sits alongside Kotlin
+2.1.0 (November 2024) and compose-bom 2024.09.02 (September 2024), roughly
+eighteen months older, and AGP 9.2.0's headline compatibility work targets the
+Kotlin 2.1.x line rather than pinning it. Combined with **C4** (no Kotlin
 plugin), **M1** (missing `proguard-rules.pro`), and **H10** (no CI has ever built
-the tree), the build should be treated as unproven rather than working.
+the tree), the build should still be treated as unproven rather than working,
+because nothing has resolved the dependency graph end to end.
 
 B also notes that no Android module applies the Kotlin plugin and infers reliance
 on AGP built-in Kotlin from `android.disallowKotlinSourceSets=false`; that thread
 is tracked in **C4** and **K3**.
 
-**Fix.** Pin verifiable stable versions, resolve them against a real dependency
-resolution, and let the CI workflow from **H10** be the proof. This finding
-closes itself the first time CI goes green.
+**Fix.** Realign Kotlin and compose-bom with the 2026 build toolchain, resolve
+the whole catalog against a real dependency resolution, and let the CI workflow
+from **H10** be the proof. This finding closes itself the first time CI goes
+green.
 
 ---
 
@@ -1110,20 +1123,24 @@ state the exception explicitly in both places.
 **Sources: C (M3), B (§4).** Promoted from a supporting detail in **H9** to its
 own finding, because the entity is missing more than `syncStatus`.
 
-`core-data/.../entities/StockMovementEntity.kt` lacks a movement direction or type
-discriminator, a link to the originating transaction, and the `syncStatus` column
-the documented sync lifecycle requires. `InventoryEngine` replays movements to
-compute stock, and without a direction field replay semantics rely on signed
-quantities that nothing validates.
+`core-data/.../entities/StockMovementEntity.kt` does carry a `type`
+discriminator, but as an unvalidated free `String` that cannot safely map to the
+domain enum: no type converter, no constraint, and its own comment enumerates
+`"SALE"`, `"RECEIPT"`, `"ADJUSTMENT"` while the domain enum value is
+`RECEIVING`, so `"RECEIPT"` does not resolve to any enum constant. What is
+genuinely absent is a movement direction, a link to the originating transaction,
+and the `syncStatus` column the documented sync lifecycle requires.
+`InventoryEngine` replays movements to compute stock, and without a direction
+field replay semantics rely on signed quantities that nothing validates.
 
-**Adds (B):** the entity stores `type` as a free `String` whose own comment says
-`"RECEIPT"` while the domain enum value is `RECEIVING`, so the entity cannot be
-mapped to the domain model without inferring `direction`. The shared
-`StockMovement` enum also has no VOID or RETURN type (**H7**), so a voided sale
-can only be modelled as a compensating movement that corrupts receiving reports.
+**Adds (B):** the shared `StockMovement` enum has no VOID or RETURN type
+(**H7**), so a voided sale can only be modelled as a compensating movement that
+corrupts receiving reports.
 
-**Fix.** Add `movementType` (as a converted enum, not a String), `transactionId`
-as a nullable FK, and `syncStatus`; add VOID and RETURN to the domain enum; and
+**Fix.** Replace the `type: String` column with `movementType` as a converted
+enum whose constants match the domain enum exactly (this is a replacement, not
+an additional field, so the two cannot drift again), add `transactionId` as a
+nullable FK and `syncStatus`, add VOID and RETURN to the domain enum, and
 increment the database version. Do it inside the destructive-migration window
 alongside **H9**.
 
@@ -1352,10 +1369,21 @@ discipline right this early is uncommon.
 
 **F-Droid discipline is real.** No Firebase, no Google Play Services, no analytics,
 no committed secrets or hardcoded service URLs. The single breach (**M3**) is an
-unused dependency in the wrong source set. C's dependency review adds that the
-catalog uses current, actively maintained libraries (Kotlin, Compose BOM, Room,
-Hilt, WorkManager, Ktor) with no abandoned or known-vulnerable entries; its only
-two observations were **M3** and **C2**, both already in this list.
+unused dependency in the wrong source set. C's dependency review adds that every
+library in the catalog (Kotlin, Compose BOM, Room, Hilt, WorkManager, Ktor)
+comes from an actively maintained project under a permissive licence, with no
+abandoned entries; its only two observations were **M3** and **C2**, both
+already in this list.
+
+That claim is narrower than C states it, and it is a licence and
+project-liveness check, not a vulnerability audit. It covers the direct versions
+declared in `gradle/libs.versions.toml` and says nothing about the transitive
+graph, which nobody has resolved (**H10**). Spot-checking advisories against the
+declared versions already turns up one hit: `ktor = "2.3.12"` is affected by
+CVE-2024-49580 / GHSA-8qv4-773j-c979, an information disclosure in the
+`HttpCache` plugin fixed in 2.3.13, so "no known-vulnerable entries" is not
+accurate as written. Bump Ktor to 2.3.13 or later, and treat the full dependency
+graph as unaudited until CI resolves it and a scanner runs over the result.
 
 **Room schema export is real.** `1.json` through `4.json` are committed and
 `4.json` matches the declared version, contrary to C's L3 (see **K2**).
@@ -1579,11 +1607,11 @@ All 36 findings carried over with their IDs unchanged: `C1-C6`, `H1-H11`,
 | H8 | `ConflictResolver` contains no conflict resolution | A, B |
 | H9 | `syncStatus` on one of four Room entities | A, B, C |
 | H10 | No CI, and the README badge points at a missing workflow | A, B |
-| H11 | Zero tests in all four Android modules | A, B, C |
+| H11 | Zero tests in all five Android modules | A, B, C |
 | H12 | Sync stack is inert end to end | B |
 | H13 | Override codes reissued identically from a stale counter | B |
 | H14 | `SECURITY.md` documents controls that do not exist | B |
-| H15 | Toolchain versions unverifiable and skewed | B |
+| H15 | Toolchain versions skewed, build unproven | B |
 
 ### Medium (16)
 
