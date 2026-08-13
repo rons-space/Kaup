@@ -455,3 +455,440 @@ feature, and `ROADMAP.md` suggests it is, implement it as an explicit encrypted
 export rather than relying on platform backup, and exclude the database via
 `dataExtractionRules` in the meantime. Also consider `FLAG_SECURE` on the lock
 screen, noted separately in [L2](#low-findings).
+
+---
+
+## High findings
+
+### H1. The default location is never seeded, while `locationId` is a non-null foreign key
+
+`CONTEXT.md:184-186` states that a "single default location is seeded on first
+launch" and instructs contributors never to omit `locationId` from a
+location-aware entity. The entities follow the instruction. The seeding does not
+happen.
+
+`ItemEntity` declares a non-null `locationId` with a cascading foreign key to
+`locations`:
+
+```kotlin
+// core/core-data/.../entities/ItemEntity.kt:11-22
+ForeignKey(
+    ...
+    childColumns = ["locationId"],
+    onDelete = ForeignKey.CASCADE
+)
+...
+val locationId: String,
+```
+
+Nothing ever inserts a location:
+
+- No `RoomDatabase.Callback`, no `addCallback`, no `createFromAsset`, and no
+  prepopulation exists anywhere in the repository. The only `onCreate` matches
+  are `MainActivity`'s activity lifecycle method, which is unrelated.
+- `LocationDao` is referenced in exactly three places: its own declaration, the
+  abstract accessor on `KaupDatabase`, and the Hilt `@Provides` method in
+  `DatabaseModule`. **It is never injected into any consumer and none of its
+  methods are ever called.**
+
+Room enables foreign key enforcement by default, so once any code attempts to
+insert an item, the insert fails with a constraint violation because the
+referenced location row cannot exist.
+
+**Why this is High and not Critical.** It is currently latent, not live. There is
+no code that inserts items yet: `ItemDao` and `StockMovementDao` have zero
+consumers outside the DI module and the database class, and the POS, inventory,
+reports, and settings destinations are all `DummyScreen` placeholders
+(`KaupAppShell.kt:130-133`). So no user can hit this today. It becomes a hard
+blocker the moment the first inventory or POS write is implemented, and it will
+present as a confusing constraint-violation crash in a feature that looks
+correct, rather than as an obviously missing seed.
+
+**Fix.** Add a `RoomDatabase.Callback` in `DatabaseModule` that inserts the
+default location in `onCreate`, and add an instrumented test that opens a fresh
+database and inserts one item. Seeding in the Room callback rather than in
+onboarding matters, because the destructive-migration policy in ADR-018 will
+recreate the database and the seed must survive that.
+
+### H2. `gradlew` is committed non-executable, so every documented build command fails
+
+The wrapper script is committed without the executable bit:
+
+```
+$ git ls-files --stage gradlew
+100644 b9bb139f790567973216cd313e69ae65789c3754 0	gradlew
+```
+
+The mode is `100644`, not `100755`. On a fresh clone on Linux or macOS, every
+`./gradlew` invocation fails with a permission error. `README.md` and
+`CONTRIBUTING.md` instruct contributors to run `./gradlew` commands, so the
+documented first-run experience is broken for every new contributor until they
+work out that they need `chmod +x gradlew`.
+
+This is filed as High rather than Low because it lands on first contact,
+affects every contributor on the two most common development platforms, and
+combines badly with [C4](#c4-no-module-applies-the-kotlin-android-plugin): a new
+contributor hits a permission error, fixes it, and then hits a build failure.
+
+**Fix.** `git update-index --chmod=+x gradlew` and commit. Note that the file
+mode is a property of the git index, so fixing the local filesystem permission
+alone does not fix the clone.
+
+### H3. RBAC, manager approval, and HOTP validation are entirely dead code
+
+`CONTEXT.md:120-134` describes RBAC as the mechanism that gates every restricted
+action, with `ManagerApprovalOverlay` and offline HOTP verification for actions
+that exceed the current role. Four commits are dedicated to building it. None of
+it is connected to anything.
+
+| Component | Definition | Call sites in production code |
+|---|---|---|
+| `ManagerApprovalOverlay` | `core-ui/.../components/ManagerApprovalOverlay.kt:25` | **0** |
+| `PermissionHelpers.hasPermission` | `core-ui/.../auth/PermissionHelpers.kt:10` | **0** (only used by line 28 of its own file) |
+| `SessionManager.hasPermission` | `core-data/.../auth/SessionManager.kt:30` | **0** |
+| `HOTPGenerator.validateCode` | `shared-kmp/.../HOTPGenerator.kt:32` | **0** (4 references, all in `HOTPGeneratorTest`) |
+
+So the authorization layer exists as a library that nothing calls. Every action
+in the app is currently unguarded, and there is no path by which a manager
+override can be requested or verified at runtime. The HOTP provisioning and
+override-code-generation screens exist, so a manager can generate a code, but
+nothing anywhere can validate one.
+
+The navigation layer makes the same point explicitly. `KaupAppShell.kt:67`
+contains:
+
+```kotlin
+// Simulate entering PIN and successful unlock
+```
+
+**Why this matters beyond "unfinished".** The risk is that RBAC is recorded as
+done. Four commits say `feat(auth): implement RBAC permission checks`, the
+roadmap can reasonably be read as ticking this off, and the code looks complete
+in isolation. When the POS and inventory screens are built on top, the natural
+assumption will be that permission checks are already enforced somewhere upstream.
+Nothing will fail loudly to correct that assumption.
+
+**Fix.** Wire one restricted action end to end before building more surface:
+gate a single destructive operation on `SessionManager.hasPermission`, present
+`ManagerApprovalOverlay` when it returns false, and validate the entered code
+through `HOTPGenerator.validateCode`. That one vertical slice turns the library
+into an enforced control and gives the pattern for everything after it.
+
+### H4. No rate limiting or lockout on PIN entry
+
+`LockScreen.kt:83-89` handles a wrong PIN with a flat 500 millisecond delay and
+a field reset:
+
+```kotlin
+} else {
+    isError = true
+    delay(500)
+    pin = ""
+    isError = false
+}
+```
+
+There is no attempt counter, no escalating backoff, no lockout, and no
+persistence of failed attempts across process death. A 4 digit PIN has 10,000
+combinations, so at roughly two attempts per second an exhaustive search takes
+under an hour and a half, and it survives app restarts because nothing is
+recorded.
+
+`SECURITY.md` does not mention attempt limiting, so this is not a documented
+deferral.
+
+**Fix.** Persist a failed-attempt count and a lockout-until timestamp on the user
+row so they survive restarts, apply escalating backoff, and lock the account
+after a threshold. Because Kaup is offline-first the lockout must be local and
+time-based, and the timestamp should be checked against elapsed realtime rather
+than wall-clock time so that changing the device clock does not clear it.
+
+### H5. Duplicate parallel domain hierarchies: the ADR-canonical interfaces are the dead ones
+
+`:shared-kmp` contains two parallel sets of the same core abstractions, in
+different packages. In every case the version the app actually uses is the
+thinner, undocumented one, and the version the ADRs describe is dead.
+
+| Abstraction | Live in app | Dead |
+|---|---|---|
+| `Permission`, `Role` | `shared.domain.models.auth` (9 imports from app code) | `shared.models` (0) |
+| `SyncBackend` | `shared.sync.SyncBackend`, Hilt-bound in `NetworkModule:17-19` | `shared.domain.sync.SyncBackend` |
+| `NoSyncBackend` | `core-network/.../backend/NoSyncBackend.kt` | `shared.domain.sync.NoSyncBackend` |
+| `NotificationBackend` | `shared.sync.NotificationBackend` | `shared.domain.notification.NotificationBackend` |
+| Default role permissions | `getDefaultPermissions` in `domain/models/auth/Permission.kt` | `RoleDefaults` (0 call sites) |
+
+Three consequences, in order of importance:
+
+1. **The test suite tests the dead implementation.** `NoSyncBackendTest` exercises
+   `shared.domain.sync.NoSyncBackend`, which the app never instantiates. The
+   `NoSyncBackend` that Hilt actually binds, in `:core-network`, has no tests.
+   The green test is therefore not evidence about shipped behaviour.
+2. **`CONTEXT.md` documents the dead side.** It states that role defaults live in
+   `RoleDefaults`, which is dead code, and `CONTEXT.md:137` lists `WAITER` as one
+   of the four built-in roles. `WAITER` exists only in the dead
+   `shared/models/Role.kt`; the live enum uses `CREW` (renamed in ADR-009). A
+   contributor following the architecture contract will edit the wrong file and
+   observe no effect.
+3. The `:shared-kmp/sync-contracts` source set that `CONTEXT.md` names as the
+   home of all pluggable interfaces does not exist at all.
+
+Note that the two `LocalNotificationBackend` files, in `androidMain` and
+`jvmMain`, are **not** an instance of this problem. Per-target implementations
+are ordinary Kotlin Multiplatform structure and are correct.
+
+**Fix.** Delete the dead packages in one commit: `shared/models/Permission.kt`,
+`shared/models/Role.kt`, `RoleDefaults.kt`, `shared/domain/sync/`, and
+`shared/domain/notification/NotificationBackend.kt`, keeping whichever side is
+preferred and repointing the tests at the surviving implementation. Then correct
+`CONTEXT.md` to match. Doing this before more features land is much cheaper than
+after, because every new import is a coin flip about which hierarchy it picks.
+
+### H6. Money arithmetic is routed through `Double`, and the totals do not reconcile
+
+`Money` itself is well chosen: a `@JvmInline value class` over `Long` minor
+units, with `plus`, `minus`, `times`, and `compareTo`. The problems are around it.
+
+**The reported totals do not add up when any inclusive tax is present.**
+`SalesCalculator.kt:78-88` returns `subtotal` gross, `taxTotal` including
+inclusive tax, but `finalTotal` excluding it:
+
+```kotlin
+val taxTotalMinorUnits = inclusiveTaxSum + exclusiveTaxSum
+// Final total only adds exclusive tax, because inclusive tax is already in the price
+val finalTotalMinorUnits = totalTaxableValue + exclusiveTaxSum
+```
+
+Worked example, one item priced 120 with a 20 percent inclusive tax and no
+discounts: `subtotal` is 120, `discountTotal` is 0, `taxTotal` is 20, and
+`finalTotal` is 120. A receipt printing those four fields shows numbers that do
+not reconcile, because 120 minus 0 plus 20 is 140, not 120. The comment on line
+80 is correct about the arithmetic but the returned `subtotal` is gross rather
+than net, so the four values cannot be presented together. For a POS, where the
+receipt is a legal document in many jurisdictions, this needs a defined
+contract: either return net subtotal plus tax, or return gross and label the tax
+as included.
+
+**Stacked inclusive taxes are each computed on the full gross.** Lines 65 to 75
+loop over `item.taxes` and compute every inclusive tax against
+`finalTaxableItemValue`, independently. For a gross of 121 carrying two 10
+percent inclusive taxes, each is computed as 121 minus 110, giving a total of 22.
+Neither an additive regime (20.17) nor a compounding one (21) produces 22, so
+the result is wrong under either interpretation.
+
+**Per-line pro-rating of the cart discount does not sum to the cart total.**
+Line 62 rounds the pro-rated discount per line, while line 48 computes
+`totalTaxableValue` directly from the cart. Three lines of 100 with a cart
+discount of 10 give a ratio of 0.0333, a per-line rounded discount of 3, and a
+per-line taxable sum of 291, while `totalTaxableValue` is 290. Tax is therefore
+computed on a base one minor unit larger than the base the total uses.
+
+**A negative quantity silently zeroes the line and corrupts the discount total.**
+With a negative `rawSubtotal`, the guard on line 25 inverts:
+`if (itemDiscount > rawSubtotal) itemDiscount = rawSubtotal` is true for a zero
+discount against a negative subtotal, so `itemDiscount` becomes the whole
+negative subtotal, line 28 returns exactly 0, and line 27 has already added the
+negative value to `discountTotalMinorUnits`. Returns and refunds, which a POS
+must handle, therefore vanish from the line total and appear as a negative
+discount.
+
+**`Money` carries no currency and no scale.** `CONTEXT.md` states Kaup targets
+any country, and currency is captured during onboarding, but `Money` is only a
+`Long`. Two different currencies can be summed with `plus` with no error, and
+because there is no `div`, every division goes through `Double`
+(lines 52, 62, 68).
+
+**Fix.** Define the rounding and presentation contract first, in an ADR, then
+test it. Specifically: decide whether `subtotal` is net or gross; compute
+inclusive tax once per item from a combined rate; allocate cart discounts with a
+largest-remainder method so the parts sum exactly to the whole; reject or
+explicitly support negative quantities; and add the invariant test that
+`subtotal - discountTotal + taxTotal == finalTotal` under the chosen contract.
+That single property test would have caught three of the five problems above.
+
+### H7. Inventory stock is accumulated in `Double`, contradicting ADR-002
+
+`InventoryEngine.computeStock` folds quantities into a `Double`
+(`InventoryEngine.kt:9-18`), as does `computeStockAsOf` and
+`ConflictResolver.detectNegativeStockViolations`. ADR-002 specifies `BigDecimal`
+for stock quantities.
+
+The consequences were verified by executing the same IEEE-754 double arithmetic
+the Kotlin code performs:
+
+```
+Ledger: receive 0.1, receive 0.1, receive 0.1, sell 0.3   (exactly balanced)
+computeStock result:  5.551115123125783e-17     == 0.0 ? False
+```
+
+So a perfectly balanced ledger does not report zero stock. Any "is this item out
+of stock" comparison against `0.0`, any equality check, and any display
+formatting that does not round will be wrong for ordinary decimal weights, which
+is the normal case for the grocery and market-stall users Kaup targets.
+
+**The same movements in a different order produce a different answer:**
+
+```
+Same four movements, reordered: 2.7755575615628914e-17
+Two orderings equal? False
+```
+
+This makes the sort on `InventoryEngine.kt:11` more than the redundant work it
+first appears to be. Summation is mathematically commutative, so sorting cannot
+change a correct total, but it does change the floating-point residual. And the
+sort keys differ between the two classes that replay the same log:
+`computeStock` sorts by `timestamp` alone, while
+`ConflictResolver.sortDeterministically` sorts by `timestamp`, then `deviceId`,
+then `id`. Two devices replaying an identical movement log with any tied
+timestamps can therefore compute different stock values, which directly
+undermines the multi-device offline-first premise.
+
+**It also produces false conflict alarms.** In
+`detectNegativeStockViolations`, the check is `currentStock < 0.0`:
+
+```
+Ledger: receive 0.7, receive 0.1, sell 0.8   (exactly balanced)
+result: -1.1102230246251565e-16   flagged as a negative-stock violation? True
+```
+
+A balanced ledger is reported as an oversell.
+
+**Fix.** Represent quantities as scaled integers (minor units, as `Money`
+already does correctly) or as `BigDecimal` per ADR-002, and make both classes
+use one shared canonical ordering. Scaled integers are the better fit here
+because they keep `:shared-kmp` free of platform decimal differences and make
+equality meaningful.
+
+### H8. `ConflictResolver` contains no conflict resolution
+
+`CONTEXT.md:113` describes `ConflictResolver` as the class that "resolves
+simultaneous writes from multiple offline devices". The class has exactly two
+methods: `sortDeterministically` and `detectNegativeStockViolations`. It orders
+events and it reports which ones crossed zero. It never merges, chooses a
+winner, or reconciles anything.
+
+`sortDeterministically` is good code and the right foundation: ordering by
+timestamp, then `deviceId`, then `id` gives a stable total order across devices.
+But detection is not resolution, and the sync lifecycle documented in
+`CONTEXT.md` has an explicit `CONFLICT` state whose transition to `SYNCED` is
+attributed to this class. Nothing performs that transition.
+
+`detectNegativeStockViolations` also under-reports. It flags a movement only when
+`previousStock >= 0.0 && currentStock < 0.0`, so it reports the single event that
+crossed zero and silently ignores every subsequent oversell while stock remains
+negative. If three devices each sell the last unit offline, one violation is
+reported, not two.
+
+**Fix.** Decide the resolution policy explicitly and write it in an ADR, since
+this is a domain decision rather than a coding one: stock movements are an
+append-only log and are inherently commutative, so they do not conflict and
+should simply be merged, while mutable records such as items and prices need a
+rule (last-write-wins with a vector clock, or per-field merge). Then either
+implement resolution here or rename the class to `StockLedgerAuditor`, which is
+what it currently is, and correct `CONTEXT.md`.
+
+### H9. `syncStatus` exists on one of four Room entities
+
+`CONTEXT.md:145-157` states that every syncable Room entity carries a
+`syncStatus` column, and describes the lifecycle from `PENDING` through
+`SYNCING`, `SYNCED`, `FAILED`, and `CONFLICT`, with WorkManager detecting
+`PENDING` rows.
+
+A repository-wide search for `syncStatus` returns two matches:
+
+```
+core/core-data/.../entities/LocationEntity.kt:13:    val syncStatus: String = "PENDING"
+shared-kmp/.../models/StockMovement.kt:26:    val syncStatus: SyncStatus = SyncStatus.PENDING
+```
+
+So of the four Room entities, only `LocationEntity` has the column.
+`ItemEntity`, `StockMovementEntity`, and `UserEntity` do not. The second match is
+the shared **domain** model, not the persisted entity, which makes the gap
+sharper than a simple omission: `StockMovement` carries a typed `SyncStatus` in
+the domain layer that has nowhere to be stored, so the value is lost on every
+write and reconstructed as `PENDING` on every read.
+
+Two related observations:
+
+- `LocationEntity.syncStatus` is a `String`, while the domain model uses a
+  `SyncStatus` enum. There is no type converter for it, so the two
+  representations are unrelated.
+- `UserEntity` has no `locationId`, so users are not location-scoped even though
+  `CONTEXT.md` requires location-awareness for multi-location support and the
+  roadmap includes per-location staff.
+
+Because nothing yet writes items or stock movements
+([H1](#h1-the-default-location-is-never-seeded-while-locationid-is-a-non-null-foreign-key)),
+this is not currently losing data. It will silently lose sync state as soon as
+those writes exist.
+
+**Fix.** Add `syncStatus` to the three entities that lack it, add a type
+converter so the enum is the single representation, and add `locationId` to
+`UserEntity`. Doing this during the destructive-migration alpha window costs
+nothing; doing it after `0.2-alpha` requires real migrations.
+
+### H10. There is no CI, and the README advertises a badge for a workflow that does not exist
+
+`.github/` contains only `ISSUE_TEMPLATE` and `pull_request_template.md`. There
+is no `workflows` directory and no workflow file of any kind. The README renders
+a CI status badge pointing at a `ci.yml` that does not exist.
+
+`CONTRIBUTING.md:200` then makes CI a merge requirement:
+
+```
+- [ ] CI passes, all unit and integration tests green
+```
+
+That checkbox can never be satisfied. A contributor reading `CONTRIBUTING.md`
+would reasonably conclude their PR will be verified automatically. Nothing is
+verified.
+
+This finding is the reason several others in this review exist. Nothing has ever
+checked that the committed tree compiles
+([C4](#c4-no-module-applies-the-kotlin-android-plugin)), that the wrapper is
+executable ([H2](#h2-gradlew-is-committed-non-executable-so-every-documented-build-command-fails)),
+or that the 32 existing tests still pass. A single workflow running
+`./gradlew build` would have caught the most severe build-level findings here on
+the commit that introduced them.
+
+**Fix.** Add `.github/workflows/ci.yml` running assemble plus `test` on pull
+requests, and make the badge point at it. Add `ktlint` or `detekt` in the same
+workflow to catch the hygiene items in [L3](#low-findings) automatically. This is
+the highest-leverage single change in this review, because it converts most of
+the other findings from invisible to self-reporting.
+
+### H11. Zero tests in all four Android modules
+
+All 32 `@Test` methods across all 8 test files live in `:shared-kmp`. The four
+Android modules have no test source sets at all:
+
+| Module | Test files |
+|---|---|
+| `:shared-kmp` | 8 files, 32 `@Test` |
+| `:core:core-data` | 0 |
+| `:core:core-ui` | 0 |
+| `:core:core-network` | 0 |
+| `:feature:feature-auth` | 0 |
+| `:android-app` | 0 |
+
+Testing the pure domain module first is the right instinct, and 32 tests on
+`:shared-kmp` is a reasonable start. But the untested modules are where this
+review's most severe findings are: plaintext PIN storage
+([C1](#c1-the-user-pin-is-stored-and-compared-in-plaintext-in-a-column-named-pinhash)),
+the PIN length lockout ([C5](#c5-a-5-or-6-digit-pin-permanently-locks-the-owner-out-of-the-app)),
+the missing location seed
+([H1](#h1-the-default-location-is-never-seeded-while-locationid-is-a-non-null-foreign-key)),
+and the unpersisted sync status
+([H9](#h9-syncstatus-exists-on-one-of-four-room-entities)). Each is the kind of
+defect a single cheap test would have caught:
+
+- one Room instrumented test that inserts an item into a fresh database
+- one test asserting the stored credential is not equal to the entered PIN
+- one test onboarding a 6 digit PIN and unlocking with it
+
+Note also from [H5](#h5-duplicate-parallel-domain-hierarchies-the-adr-canonical-interfaces-are-the-dead-ones)
+that part of the existing 32 tests covers a dead code path, so effective coverage
+of shipped behaviour is lower than the count suggests.
+
+**Fix.** Add a Room instrumented test module for `:core:core-data` and unit tests
+for the auth view models, and wire both into the CI workflow from
+[H10](#h10-there-is-no-ci-and-the-readme-advertises-a-badge-for-a-workflow-that-does-not-exist).
