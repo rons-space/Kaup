@@ -69,7 +69,7 @@ You do not need to write code to contribute meaningfully:
 
 - Android Studio Meerkat or later
 - JDK 17 or later
-- Android SDK API 26 minimum, latest stable target SDK
+- Android SDK API 24 minimum, latest stable target SDK
 - Docker (optional — only needed to run the Ktor server locally)
 
 ### Steps

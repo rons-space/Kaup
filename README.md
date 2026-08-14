@@ -100,7 +100,7 @@ updates Kaup automatically — no app store needed.
 ### Requirements
 - Android Studio Meerkat or later
 - JDK 17 or later
-- Android SDK — API 26 minimum, latest stable target
+- Android SDK — API 24 minimum, latest stable target
 
 ```bash
 # Clone
