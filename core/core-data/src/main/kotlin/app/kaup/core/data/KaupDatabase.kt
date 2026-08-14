@@ -5,21 +5,25 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import app.kaup.core.data.converters.MovementDirectionConverter
 import app.kaup.core.data.converters.MovementTypeConverter
-import app.kaup.core.data.converters.PermissionSetConverter
+import app.kaup.core.data.converters.OverrideScopeConverter
+import app.kaup.core.data.converters.PermissionConverter
 import app.kaup.core.data.converters.RoleConverter
 import app.kaup.core.data.converters.SyncStatusConverter
 import app.kaup.core.data.dao.ItemDao
 import app.kaup.core.data.dao.LocationDao
+import app.kaup.core.data.dao.OverrideLogDao
 import app.kaup.core.data.dao.StockMovementDao
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.ItemEntity
 import app.kaup.core.data.entities.LocationEntity
+import app.kaup.core.data.entities.OverrideLogEntity
 import app.kaup.core.data.entities.StockMovementEntity
 import app.kaup.core.data.entities.UserEntity
 
 @TypeConverters(
     RoleConverter::class,
-    PermissionSetConverter::class,
+    PermissionConverter::class,
+    OverrideScopeConverter::class,
     SyncStatusConverter::class,
     MovementTypeConverter::class,
     MovementDirectionConverter::class
@@ -29,7 +33,8 @@ import app.kaup.core.data.entities.UserEntity
         LocationEntity::class,
         ItemEntity::class,
         StockMovementEntity::class,
-        UserEntity::class
+        UserEntity::class,
+        OverrideLogEntity::class
     ],
     version = KaupDatabase.DATABASE_VERSION,
     exportSchema = true
@@ -39,6 +44,7 @@ abstract class KaupDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
     abstract fun stockMovementDao(): StockMovementDao
     abstract fun userDao(): UserDao
+    abstract fun overrideLogDao(): OverrideLogDao
 
     companion object {
         /**
@@ -53,8 +59,12 @@ abstract class KaupDatabase : RoomDatabase() {
          *   6  stock_movements.quantity moves from REAL to INTEGER
          *      thousandths (ADR-020), so replaying the log stops
          *      accumulating float drift
+         *   7  manager override becomes real (ADR-021): the override_log
+         *      audit table arrives, users gains override throttling state,
+         *      and users.permissionsOverride is dropped because nothing
+         *      wrote it and a plaintext row edit could grant anything
          */
-        const val DATABASE_VERSION: Int = 6
+        const val DATABASE_VERSION: Int = 7
 
         /**
          * ADR-018 Phase 1: alpha builds recreate the database instead of

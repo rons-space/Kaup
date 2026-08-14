@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import app.kaup.shared.domain.models.auth.Permission
 import app.kaup.shared.domain.models.auth.Role
 import app.kaup.shared.models.SyncStatus
 
@@ -39,7 +38,12 @@ data class UserEntity(
     // that killing the app is not a way to reset the counter.
     val failedPinAttempts: Int = 0,
     val pinLockoutUntilUptimeMillis: Long = 0L,
-    val permissionsOverride: Set<Permission>? = null,
+    // The same, for people entering this user's manager override codes on some
+    // other device. Kept against the approving manager rather than the staff
+    // session, so cycling staff accounts does not reset the allowance and
+    // dismissing the overlay does not either. See ADR-021.
+    val failedOverrideAttempts: Int = 0,
+    val overrideLockoutUntilUptimeMillis: Long = 0L,
     val hotpSecretEncrypted: String? = null,
     val hotpCounter: Long = 0,
     val syncStatus: SyncStatus = SyncStatus.PENDING
