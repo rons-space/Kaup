@@ -63,8 +63,9 @@ fun KaupAppShell(
                 }
                 composable("lock_screen") {
                     LockScreen(
+                        // Reached only after PinAuthenticator has verified the
+                        // PIN and SessionManager holds the session.
                         onUserSelected = { userId ->
-                            // Simulate entering PIN and successful unlock
                             rootNavController.navigate("main") {
                                 popUpTo("lock_screen") { inclusive = true }
                             }

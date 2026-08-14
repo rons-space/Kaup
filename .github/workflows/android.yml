@@ -29,3 +29,15 @@ jobs:
       run: chmod +x gradlew
     - name: Build with Gradle
       run: ./gradlew build
+
+    # ADR-018 requires the exported Room schema for every DATABASE_VERSION to
+    # be committed. The build writes it into core/core-data/schemas, so a PR
+    # that bumps the version can pull the generated file from this artifact
+    # rather than needing an Android SDK locally.
+    - name: Upload exported Room schemas
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: room-schemas
+        path: core/core-data/schemas/
+        if-no-files-found: warn

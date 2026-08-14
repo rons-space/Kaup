@@ -28,6 +28,7 @@ fun LockScreen(
     viewModel: LockScreenViewModel = hiltViewModel()
 ) {
     val users by viewModel.users.collectAsState()
+    val pinEntryState by viewModel.pinEntryState.collectAsState()
     var selectedUser by remember { mutableStateOf<UserEntity?>(null) }
 
     if (selectedUser == null) {
@@ -60,10 +61,15 @@ fun LockScreen(
     } else {
         PinEntryScreen(
             user = selectedUser!!,
-            onCancel = { selectedUser = null },
-            onSuccess = { 
-                viewModel.login(selectedUser!!)
-                onUserSelected(selectedUser!!.id) 
+            entryState = pinEntryState,
+            onCancel = {
+                viewModel.clearPinEntryState()
+                selectedUser = null
+            },
+            onSubmit = { pin ->
+                viewModel.submitPin(selectedUser!!, pin) {
+                    onUserSelected(selectedUser!!.id)
+                }
             }
         )
     }
@@ -72,28 +78,22 @@ fun LockScreen(
 @Composable
 fun PinEntryScreen(
     user: UserEntity,
+    entryState: PinEntryState,
     onCancel: () -> Unit,
-    onSuccess: () -> Unit
+    onSubmit: (String) -> Unit
 ) {
     var pin by remember { mutableStateOf("") }
-    var isError by remember { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
+    val isError = entryState is PinEntryState.Incorrect || entryState is PinEntryState.LockedOut
+    val isChecking = entryState is PinEntryState.Checking
 
-    // Evaluation is triggered by the confirm action, never by PIN length.
-    // Submitting at a fixed length made every PIN longer than that length
-    // impossible to enter, which locked the owner out of the app.
-    LaunchedEffect(submitted) {
-        if (!submitted) return@LaunchedEffect
-        // TODO(#158): compare against a hashed credential, in a repository.
-        if (pin == user.pinHash) {
-            onSuccess()
-        } else {
-            isError = true
+    // Clear the digits after a rejected attempt. Evaluation itself is triggered
+    // by the confirm action, never by PIN length: submitting at a fixed length
+    // made every longer PIN impossible to enter, which locked the owner out.
+    LaunchedEffect(entryState) {
+        if (entryState is PinEntryState.Incorrect || entryState is PinEntryState.LockedOut) {
             delay(500)
             pin = ""
-            isError = false
         }
-        submitted = false
     }
 
     Column(
@@ -146,15 +146,25 @@ fun PinEntryScreen(
                 )
             }
         }
-        if (isError) {
-            Text(
-                text = "Incorrect PIN",
+        when (entryState) {
+            is PinEntryState.Incorrect -> Text(
+                text = if (entryState.attemptsBeforeLockout > 0) {
+                    "Incorrect PIN. ${entryState.attemptsBeforeLockout} attempts left"
+                } else {
+                    "Incorrect PIN. The next failure locks entry"
+                },
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp)
             )
-        } else {
-            Spacer(modifier = Modifier.height(28.dp)) // Maintain spacing
+            is PinEntryState.LockedOut -> Text(
+                text = "Too many attempts. Try again in " +
+                    "${(entryState.remainingMillis / 1000).coerceAtLeast(1)}s",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            else -> Spacer(modifier = Modifier.height(28.dp)) // Maintain spacing
         }
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -212,8 +222,10 @@ fun PinEntryScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { submitted = true },
-            enabled = PinPolicy.isSubmittable(pin) && !submitted,
+            onClick = { onSubmit(pin) },
+            enabled = PinPolicy.isSubmittable(pin) &&
+                !isChecking &&
+                entryState !is PinEntryState.LockedOut,
             modifier = Modifier
                 .width(280.dp)
                 .height(56.dp)
