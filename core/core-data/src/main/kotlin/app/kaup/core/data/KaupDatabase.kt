@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import app.kaup.core.data.converters.MovementDirectionConverter
 import app.kaup.core.data.converters.MovementTypeConverter
 import app.kaup.core.data.converters.PermissionSetConverter
+import app.kaup.core.data.converters.QuantityConverter
 import app.kaup.core.data.converters.RoleConverter
 import app.kaup.core.data.converters.SyncStatusConverter
 import app.kaup.core.data.dao.ItemDao
@@ -22,7 +23,8 @@ import app.kaup.core.data.entities.UserEntity
     PermissionSetConverter::class,
     SyncStatusConverter::class,
     MovementTypeConverter::class,
-    MovementDirectionConverter::class
+    MovementDirectionConverter::class,
+    QuantityConverter::class
 )
 @Database(
     entities = [
@@ -50,8 +52,11 @@ abstract class KaupDatabase : RoomDatabase() {
          *   5  syncStatus on every entity, locationId on users, hashed PIN
          *      columns and lockout state, stock movements reconciled with the
          *      domain model (typed movement, direction, transactionId)
+         *   6  stock_movements.quantity moves from REAL to INTEGER
+         *      thousandths (ADR-020), so replaying the log stops
+         *      accumulating float drift
          */
-        const val DATABASE_VERSION: Int = 5
+        const val DATABASE_VERSION: Int = 6
 
         /**
          * ADR-018 Phase 1: alpha builds recreate the database instead of

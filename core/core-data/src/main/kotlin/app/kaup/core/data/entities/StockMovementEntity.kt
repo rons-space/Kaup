@@ -6,6 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import app.kaup.shared.models.MovementDirection
 import app.kaup.shared.models.MovementType
+import app.kaup.shared.models.Quantity
 import app.kaup.shared.models.SyncStatus
 
 /**
@@ -44,10 +45,10 @@ data class StockMovementEntity(
     @PrimaryKey val id: String,
     val locationId: String,
     val itemId: String,
-    // Quantity stays a Double until the money and quantity contract lands
-    // (#170). That change is also a schema change, and it has to happen before
-    // v0.2-alpha closes the destructive migration window.
-    val quantity: Double,
+    // Stored as thousandths of a unit via QuantityConverter, so the column is
+    // INTEGER rather than REAL. Stock is a sum over this table, and a REAL
+    // column would reintroduce exactly the drift ADR-020 removes.
+    val quantity: Quantity,
     val movementType: MovementType,
     val direction: MovementDirection,
     // Set when the movement was produced by a sale, void or refund. There is no
