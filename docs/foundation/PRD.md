@@ -98,7 +98,7 @@ for, prototyped, or partially implemented:
 | Offline operation | 100% of features functional with no internet |
 | Backup and restore | Completes in ≤ 30 seconds for 12 months of transaction data |
 | Base APK size | ≤ 30 MB |
-| Minimum Android version | Android 8.0 (API 26) |
+| Minimum Android version | Android 8.0 (API 26) as specified; the build currently ships `minSdk = 24` (see Compatibility) |
 | POS screen load time from Lock Screen | ≤ 300 ms |
 | F-Droid compliance | Zero proprietary trackers, zero hard FCM dependency |
 | Crash-free session rate (alpha target) | ≥ 95% |
@@ -154,6 +154,16 @@ operation. See ADR-001.
 
 ### Compatibility
 - Minimum: Android 8.0 (API 26)
+
+  > **Unresolved (#187).** Every module in the build declares `minSdk = 24`,
+  > which is Android 7.0, two API levels below this requirement. The developer
+  > documentation has been corrected to describe what the build actually does,
+  > but this row is a product decision and is left as written until someone
+  > rules on it. Either the build rises to 26, dropping Android 7.0 devices, or
+  > this requirement drops to 24 and the extra reach becomes intentional. It
+  > should not stay ambiguous: the gap decides whether a whole class of cheap
+  > retail hardware is supported.
+
 - Target: latest stable Android SDK
 - Must function on low-spec devices (2 GB RAM, budget chipsets) commonly
   used in SME retail environments

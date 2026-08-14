@@ -27,7 +27,7 @@ A two-phase strategy is adopted, with a hard boundary at `v0.2-alpha`
 Room is configured with `fallbackToDestructiveMigration()`:
 
 ```kotlin
-Room.databaseBuilder(context, KaupDatabase::class.java, "kaup.db")
+Room.databaseBuilder(context, KaupDatabase::class.java, "kaup_database")
     .fallbackToDestructiveMigration()
     .build()
 ```
@@ -42,7 +42,7 @@ This is acceptable during alpha because:
 - A backup created before upgrading restores all data after the wipe
 
 The schema version is incremented on every PR that changes any entity class.
-Schema JSON exports are committed to `/app/schemas/` on every version increment
+Schema JSON exports are committed to `core/core-data/schemas/` on every version increment
 to maintain a version history even during alpha.
 
 ### Phase 2 — Beta and Stable (`v0.2-alpha` onward)
@@ -57,7 +57,7 @@ val MIGRATION_X_Y = object : Migration(X, Y) {
     }
 }
 
-Room.databaseBuilder(context, KaupDatabase::class.java, "kaup.db")
+Room.databaseBuilder(context, KaupDatabase::class.java, "kaup_database")
     .addMigrations(MIGRATION_X_Y)
     .build()
 ```
@@ -80,7 +80,7 @@ ksp {
 }
 ```
 
-Every schema version JSON is committed to `/app/schemas/`. This gives a complete
+Every schema version JSON is committed to `core/core-data/schemas/`. This gives a complete
 version history and is required for `MigrationTestHelper` to function.
 
 **The v0.2-alpha baseline migration:**
