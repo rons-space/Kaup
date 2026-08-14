@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import app.kaup.core.data.entities.UserEntity
+import app.kaup.core.ui.security.SecureScreen
 import app.kaup.shared.domain.auth.PinPolicy
 import kotlinx.coroutines.delay
 
@@ -30,6 +31,9 @@ fun LockScreen(
     val users by viewModel.users.collectAsState()
     val pinEntryState by viewModel.pinEntryState.collectAsState()
     var selectedUser by remember { mutableStateOf<UserEntity?>(null) }
+
+    // A recording of the PIN pad shows which keys are pressed.
+    SecureScreen()
 
     if (selectedUser == null) {
         Column(
