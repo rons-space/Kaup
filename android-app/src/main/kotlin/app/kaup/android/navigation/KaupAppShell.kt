@@ -21,6 +21,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
 import app.kaup.feature.auth.ui.LockScreen
+import app.kaup.feature.auth.ui.hotp.HotpProvisioningRoute
+import app.kaup.feature.auth.ui.hotp.OverrideCodeGenerationScreen
 import app.kaup.feature.auth.ui.onboarding.OnboardingScreen
 import app.kaup.core.ui.auth.LocalPermissions
 
@@ -131,7 +133,23 @@ fun MainShell() {
             composable("pos") { DummyScreen("POS Register Placeholder") }
             composable("inventory") { DummyScreen("Inventory Placeholder") }
             composable("reports") { DummyScreen("Reports Placeholder") }
-            composable("settings") { DummyScreen("Settings Placeholder") }
+            composable("settings") {
+                SecuritySettingsScreen(
+                    onProvisionHotp = { navController.navigate("hotp_provisioning") },
+                    onGenerateOverrideCode = { navController.navigate("override_code") }
+                )
+            }
+            // Both of these screens existed with nothing routing to them, so
+            // manager authorization could not be set up or used at all.
+            composable("hotp_provisioning") {
+                HotpProvisioningRoute(
+                    onComplete = { navController.popBackStack() },
+                    onCancel = { navController.popBackStack() }
+                )
+            }
+            composable("override_code") {
+                OverrideCodeGenerationScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

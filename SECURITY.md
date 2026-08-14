@@ -56,6 +56,14 @@ Implemented today:
 - The lock, HOTP provisioning and override code screens set `FLAG_SECURE`, so
   they cannot be screenshotted or screen-recorded and do not appear in the
   recent apps preview
+- Manager override is wired end to end: codes are validated in constant time
+  against the approving manager's secret, attempts are throttled per manager
+  and survive process death, the counter is consumed in the same transaction
+  as the audit row, and the granted action re-checks that audit row before it
+  runs
+- Every granted override is written to an append-only `override_log` table
+  recording the approver, the requester, the permission, the scope and the
+  counter consumed
 
 Not implemented yet, each tracked by an issue:
 
@@ -63,9 +71,7 @@ Not implemented yet, each tracked by an issue:
 |---|---|
 | Database encryption at rest | Not implemented. There is no SQLCipher or equivalent in the build |
 | AES-encrypted backups | Not implemented. The backup feature itself does not exist yet |
-| RBAC enforcement | Not implemented. The permission model exists in code but no operation is gated on it |
-| Manager approval and HOTP validation | Not wired up. The approval overlay does not yet validate a code |
-| Audit log | Not implemented |
+| RBAC enforcement | Partial. The mechanism works and gates HOTP provisioning; the POS operations that most need it (void, refund, price override) are still placeholder screens |
 | Biometric enrollment | Not implemented, planned for v0.2-alpha |
 | Ktor server, HTTPS, JWT | The server does not exist yet |
 
@@ -89,9 +95,14 @@ what is real today, and the ADRs for the reasoning.
 
 - Restricted actions require a cryptographically signed HOTP code (RFC 4226)
 - HOTP secret keys are stored in Android Keystore — the app cannot extract them
-- Every HOTP code is single-use — consumed immediately on validation
+- Every HOTP code is single-use — consumed immediately on validation, and
+  accepting a drifted code invalidates every code behind it
 - All authorization events are written to an audit log
-- See [ADR-005](docs/adr/ADR-005-hotp-offline-authorization.md)
+- A code's scope is enforced by the validating device and recorded in the audit
+  row; it is not carried inside the code, which is a documented limitation of
+  using standard HOTP rather than an oversight
+- See [ADR-005](docs/adr/ADR-005-hotp-offline-authorization.md) and
+  [ADR-021](docs/adr/ADR-021-authorization-enforcement-model.md)
 
 ### Screen Capture
 
@@ -119,6 +130,9 @@ what is real today, and the ADRs for the reasoning.
 ### Permission Model
 
 - All RBAC permission checks are enforced locally on the Android client
+- Enforcement lives below the UI, in the use case that performs the operation.
+  The Compose helpers apply the same shared rule, but only to decide what to
+  draw
 - Restricted UI elements are hidden entirely — not merely disabled
 - The Ktor server performs JWT validation; server-side RBAC enforcement
   is a post-v1 hardening milestone

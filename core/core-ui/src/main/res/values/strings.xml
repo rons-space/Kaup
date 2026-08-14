@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared component copy.
+
+  This file exists because the manager approval overlay arrived with it. The
+  rest of :core-ui still has its strings inline; migrating those is #189.
+-->
+<resources>
+    <string name="manager_approval_title">Manager approval required</string>
+    <string name="manager_approval_action">Action: %1$s</string>
+    <string name="manager_approval_choose_approver">Who is approving?</string>
+    <string name="manager_approval_code_label">6 digit code</string>
+    <string name="manager_approval_code_hint">Ask the manager to read you the code from their device.</string>
+    <string name="manager_approval_approve">Approve</string>
+    <string name="manager_approval_cancel">Cancel</string>
+    <string name="manager_approval_no_approvers">No manager on this device has set up authorization yet, so this action cannot be approved here.</string>
+
+    <string name="manager_approval_scope_title">What does this code authorise?</string>
+    <string name="manager_approval_scope_specific">This action only</string>
+    <string name="manager_approval_scope_specific_detail">Recommended. Spent immediately on this one action.</string>
+    <string name="manager_approval_scope_elevation">Any one action for %1$d minutes</string>
+    <string name="manager_approval_scope_elevation_warning">The next restricted action taken on this device, whatever it is, will go through without asking again.</string>
+</resources>

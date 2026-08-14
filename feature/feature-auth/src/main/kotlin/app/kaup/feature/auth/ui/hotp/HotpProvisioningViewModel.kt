@@ -2,10 +2,14 @@ package app.kaup.feature.auth.ui.hotp
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.os.SystemClock
+import app.kaup.core.data.auth.OverrideAuthorizer
 import app.kaup.core.data.auth.SessionManager
 import app.kaup.core.data.crypto.KeystoreManager
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.preferences.StorePreferences
+import app.kaup.shared.domain.auth.AuthorizationDecision
+import app.kaup.shared.domain.models.auth.Permission
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +32,8 @@ data class HotpProvisioningState(
      * scanner.
      */
     val isSecretRevealed: Boolean = false,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val errorMessage: String? = null
 )
 
 /**
@@ -54,6 +59,7 @@ data class HotpProvisioningState(
 class HotpProvisioningViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val keystoreManager: KeystoreManager,
+    private val overrideAuthorizer: OverrideAuthorizer,
     private val userDao: UserDao,
     private val storePreferences: StorePreferences
 ) : ViewModel() {
@@ -94,11 +100,34 @@ class HotpProvisioningViewModel @Inject constructor(
         _uiState.update { it.copy(isSecretRevealed = revealed) }
     }
 
-    fun saveAndComplete() {
+    /**
+     * Writes the secret, if the caller is allowed to.
+     *
+     * The permission check is here rather than only on the route that led here,
+     * because a route is a suggestion. Provisioning mints the credential that
+     * authorises every override, so a caller reaching this method without
+     * USERS_EDIT has to be refused by the method itself.
+     *
+     * [approvalLogId] is the `override_log` row from a manager approval. It is
+     * re-read from the database rather than trusted, so the screen cannot claim
+     * an approval it did not obtain, and an approval for some other permission
+     * cannot be spent here.
+     */
+    fun saveAndComplete(approvalLogId: String? = null) {
         val secret = rawSecret ?: return
         val user = sessionManager.currentUser.value ?: return
 
         viewModelScope.launch {
+            if (!isAuthorized(user.id, approvalLogId)) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "You are not authorised to set up manager " +
+                            "authorization, and no valid manager approval was supplied."
+                    )
+                }
+                return@launch
+            }
+
             try {
                 val encrypted = keystoreManager.encrypt(secret)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -120,6 +149,26 @@ class HotpProvisioningViewModel @Inject constructor(
         }
     }
 
+    private suspend fun isAuthorized(userId: String, approvalLogId: String?): Boolean {
+        val decision = sessionManager.authorize(
+            permission = REQUIRED_PERMISSION,
+            nowUptimeMillis = SystemClock.elapsedRealtime()
+        )
+        if (decision !is AuthorizationDecision.RequiresManagerApproval) {
+            // Granted by the session, or by an elevation token. A token is
+            // single use, so spend it here rather than leaving it live.
+            if (decision is AuthorizationDecision.GrantedByElevation) {
+                sessionManager.spendElevation()
+            }
+            return true
+        }
+        return approvalLogId != null && overrideAuthorizer.verifyGrant(
+            logId = approvalLogId,
+            permission = REQUIRED_PERMISSION,
+            requestedByUserId = userId
+        )
+    }
+
     override fun onCleared() {
         // Covers the manager who generates a secret and then backs out. Without
         // this the bytes sit in the heap for as long as the process lives.
@@ -130,6 +179,16 @@ class HotpProvisioningViewModel @Inject constructor(
     private fun wipeSecret() {
         rawSecret?.fill(0)
         rawSecret = null
+    }
+
+    companion object {
+        /**
+         * Provisioning a manager's HOTP secret is user administration: it
+         * creates the credential that approves everything else, and doing it
+         * again invalidates the old one. Only OWNER holds USERS_EDIT by
+         * default, so a manager needs an owner's approval to get here.
+         */
+        val REQUIRED_PERMISSION: Permission = Permission.USERS_EDIT
     }
 
     // Simple Base32 encoder for the OTP URI

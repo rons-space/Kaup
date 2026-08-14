@@ -26,6 +26,9 @@ interface OverrideLogDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insert(entry: OverrideLogEntity)
 
+    @Query("SELECT * FROM override_log WHERE id = :id LIMIT 1")
+    fun getById(id: String): OverrideLogEntity?
+
     @Query("SELECT * FROM override_log ORDER BY grantedAtEpochMillis DESC")
     fun observeAll(): Flow<List<OverrideLogEntity>>
 
