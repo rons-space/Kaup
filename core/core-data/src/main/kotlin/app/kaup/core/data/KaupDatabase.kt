@@ -74,6 +74,12 @@ abstract class KaupDatabase : RoomDatabase() {
          * TODO(v0.2-alpha, #203): flip this to false, write the baseline
          * Migration, and add the MigrationTestHelper suite. The cutover is a
          * release blocker for v0.2-alpha, not a follow-up.
+         *
+         * This constant is now only half of the decision. `AlphaMigrationWindow`
+         * in :android-app checks it against the app's versionName before the
+         * fallback is armed, and `AlphaMigrationWindowTest` fails the build if
+         * the version moves past the window while this is still true. Leaving
+         * it set is no longer a silent mistake.
          */
         const val ALPHA_DESTRUCTIVE_MIGRATION: Boolean = true
     }
