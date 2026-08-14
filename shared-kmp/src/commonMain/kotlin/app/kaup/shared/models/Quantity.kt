@@ -17,6 +17,12 @@ import kotlin.jvm.JvmInline
  *
  * Arithmetic is overflow-checked for the same reason [Money]'s is: a wrapped
  * stock figure is worse than a refused operation.
+ *
+ * Do not use this as a Room column type. Room 2.6.1 unwraps a value class with
+ * `getDeclaredFields().single()`, and the companion object below compiles
+ * [SCALE] and [ZERO] to static fields on the class, so that call throws
+ * "List has more than one element". Persist [thousandths] and convert at the
+ * edge. The same applies to [Money].
  */
 @JvmInline
 value class Quantity(val thousandths: Long) : Comparable<Quantity> {

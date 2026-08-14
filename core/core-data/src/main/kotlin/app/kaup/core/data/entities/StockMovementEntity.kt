@@ -48,12 +48,20 @@ data class StockMovementEntity(
     // is a sum over this table, so the column is INTEGER: a REAL would
     // reintroduce exactly the float drift ADR-020 removes.
     //
-    // The unit is in the name because the column is a bare Long. Room maps a
-    // value class by unwrapping its single underlying property, and Quantity
-    // has isNegative and isZero alongside thousandths, which makes that
-    // unwrapping ambiguous and fails the build. Storing the primitive here also
-    // matches timestamp, which is an epoch Long rather than an Instant, so the
-    // entity is already the persistence shape rather than the domain one.
+    // The unit is in the name because the column is a bare Long, and a Long
+    // called quantity is the exact ambiguity ADR-020 is about: SELECT
+    // SUM(quantity) would silently return thousandths.
+    //
+    // It is a Long rather than a Quantity because Room 2.6.1 unwraps a value
+    // class with getDeclaredFields().single(). Quantity's companion object
+    // compiles SCALE and ZERO to static fields on the class, so it declares
+    // three fields and that call throws "List has more than one element". The
+    // getter-only isNegative and isZero are not involved: they have no backing
+    // field. Any value class with a companion hits this, Money included, so
+    // persist the primitive and convert at the edge.
+    //
+    // That also matches timestamp, an epoch Long rather than an Instant: this
+    // entity is the persistence shape, not the domain one.
     val quantityThousandths: Long,
     val movementType: MovementType,
     val direction: MovementDirection,

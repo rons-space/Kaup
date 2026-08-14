@@ -109,15 +109,17 @@ log that only grows.
 - The `stock_movements.quantity` REAL column becomes an INTEGER
   `quantityThousandths`. That is a schema change, and ADR-018 requires it to
   land before `v0.2-alpha` closes the destructive migration window.
-- The entity stores the raw `Long`, not a `Quantity`. Room maps a value class by
-  unwrapping its single underlying property, and `Quantity` has `isNegative` and
-  `isZero` alongside `thousandths`, which makes that unwrapping ambiguous and
-  fails the build with `List has more than one element`. Crippling the domain
-  type to suit the ORM would be the wrong trade, and the entity already stores
-  `timestamp` as an epoch `Long` rather than an `Instant`, so it is the
-  persistence shape rather than the domain one. The unit is in the column name
-  because a bare `Long` called `quantity` is the exact ambiguity this ADR is
-  about: `SELECT SUM(quantity)` would silently return thousandths.
+- The entity stores the raw `Long`, not a `Quantity`. Room 2.6.1 unwraps a value
+  class with `getDeclaredFields().single()`, and `Quantity`'s companion object
+  compiles `SCALE` and `ZERO` to static fields on the class, so it declares
+  three fields and the call fails with `List has more than one element`. This
+  applies to any value class with a companion, `Money` included, so the rule is
+  to persist the primitive and convert at the edge rather than to strip members
+  off a domain type to suit the ORM. The entity already stores `timestamp` as an
+  epoch `Long` rather than an `Instant`, so it is the persistence shape anyway.
+  The unit is in the column name because a bare `Long` called `quantity` is the
+  exact ambiguity this ADR is about: `SELECT SUM(quantity)` would silently
+  return thousandths.
 - `LineItem.quantity` on the sale side stays a `Double` for now, as ADR-019
   noted. It is the last one, and moving it lets the line extension be computed
   in exact integer arithmetic.
