@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 (API 31) and above read these rules instead of allowBackup.
+  Everything is excluded from both paths: cloud backup is off entirely, and
+  device-to-device transfer must not carry the Room database (transactions,
+  stock movements, staff credentials) or the shared preferences that point at
+  a sync backend. The user-facing way to move data is the explicit
+  AES-encrypted backup and restore in Settings.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

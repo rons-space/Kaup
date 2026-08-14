@@ -4,9 +4,18 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      allowBackup is false, and device-to-device transfer is excluded in
+      data_extraction_rules.xml, because the Room database holds the full
+      transaction history and the staff credential table. Platform backup
+      would copy both off the device with no encryption we control. The
+      supported path off the device is the explicit AES-encrypted export in
+      Settings, where the user chooses the destination and the passphrase.
+    -->
     <application
         android:name=".KaupApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Kaup"
         android:supportsRtl="true"

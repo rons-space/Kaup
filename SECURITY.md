@@ -32,14 +32,46 @@ remain anonymous.
 
 ---
 
-## Security Architecture
+## Implementation Status
 
-Understanding the security design helps identify meaningful vulnerabilities.
-For full details see the relevant ADRs linked below.
+> **Read this before relying on anything below.** Kaup is at `0.1-alpha` and
+> most of the security architecture is designed but not yet built. This section
+> previously described the target state as though it were shipped. It does not
+> any more.
+>
+> **Do not run an alpha build in a real store.**
+
+Implemented today:
+
+- HOTP secret keys are encrypted with a key held in Android Keystore
+- Sessions are held in memory only and are never written to disk
+- Platform backup and device-to-device transfer are disabled, so the database
+  cannot be extracted through Android's backup mechanism
+
+Not implemented yet, each tracked by an issue:
+
+| Control | Status |
+|---|---|
+| PIN hashing | Not implemented. The PIN is currently stored and compared in plaintext |
+| PIN rate limiting and lockout | Not implemented |
+| Database encryption at rest | Not implemented. There is no SQLCipher or equivalent in the build |
+| AES-encrypted backups | Not implemented. The backup feature itself does not exist yet |
+| RBAC enforcement | Not implemented. The permission model exists in code but no operation is gated on it |
+| Manager approval and HOTP validation | Not wired up. The approval overlay does not yet validate a code |
+| Audit log | Not implemented |
+| Biometric enrollment | Not implemented, planned for v0.2-alpha |
+| Ktor server, HTTPS, JWT | The server does not exist yet |
+
+---
+
+## Security Architecture (design target)
+
+This is the design the project is building toward. Consult the table above for
+what is real today, and the ADRs for the reasoning.
 
 ### Authentication and Session Management
 
-- All staff sessions are PIN-protected (4–6 digits)
+- All staff sessions are PIN-protected, 6 digits for newly created PINs
 - Optional biometric enrollment uses Android BiometricPrompt — the private
   key never leaves Android Keystore
 - Sessions are held in memory only — never persisted to disk
@@ -105,7 +137,8 @@ The following are known design trade-offs, not vulnerabilities:
 - **HOTP look-ahead window** — The HOTP validator accepts the next 10 valid
   codes to handle counter desynchronization. This is the RFC 4226
   recommended mitigation and represents a negligible brute-force risk in
-  a physical retail environment with rate limiting and audit logging in place.
+  a physical retail environment once rate limiting and audit logging are in
+  place. Neither is implemented yet.
 
 - **General elevation tokens** — If enabled by the admin, a manager can
   generate a time-limited general elevation token rather than an

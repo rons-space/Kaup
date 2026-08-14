@@ -20,8 +20,9 @@ stop working the moment your internet drops. Kaup does not.
 
 - **Offline-first** — every sale, stock movement, and receipt works with no
   internet connection, always
-- **Your data, your device** — all data is stored locally in an encrypted Room
-  database; you own it
+- **Your data, your device** — all data is stored locally in a Room database on
+  your device; you own it. At-rest encryption of that database is planned and
+  not yet implemented, so do not run an alpha build in a real store
 - **No subscription** — free forever under GPL v3; no paywalled features
 - **No vendor lock-in** — sync is optional and pluggable; use your own server,
   Supabase, Appwrite, or nothing at all

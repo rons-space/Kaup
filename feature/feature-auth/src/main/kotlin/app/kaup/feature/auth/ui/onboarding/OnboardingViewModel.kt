@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.UserEntity
 import app.kaup.core.data.preferences.StorePreferences
+import app.kaup.shared.domain.auth.PinPolicy
 import app.kaup.shared.domain.models.auth.Role
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,8 +27,11 @@ data class OnboardingUiState(
     val isStep1Valid: Boolean
         get() = storeName.isNotBlank() && currency.isNotBlank()
 
+    // PinPolicy is the single source of truth shared with the lock screen. A
+    // length this screen accepts but the lock screen cannot enter locks the
+    // owner out of their own store.
     val isStep2Valid: Boolean
-        get() = ownerName.isNotBlank() && ownerPin.length >= 4
+        get() = ownerName.isNotBlank() && PinPolicy.isValidNewPin(ownerPin)
 }
 
 @HiltViewModel
@@ -52,8 +56,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun updateOwnerPin(pin: String) {
-        // Limit to numbers, e.g., max 6 digits
-        if (pin.all { it.isDigit() } && pin.length <= 6) {
+        if (pin.all { it.isDigit() } && pin.length <= PinPolicy.NEW_PIN_LENGTH) {
             _uiState.update { it.copy(ownerPin = pin) }
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import app.kaup.shared.domain.auth.PinPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,7 +145,7 @@ private fun OwnerSetupStep(uiState: OnboardingUiState, viewModel: OnboardingView
         OutlinedTextField(
             value = uiState.ownerPin,
             onValueChange = { viewModel.updateOwnerPin(it) },
-            label = { Text("4-6 Digit PIN") },
+            label = { Text("${PinPolicy.NEW_PIN_LENGTH}-Digit PIN") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth()
