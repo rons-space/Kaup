@@ -47,9 +47,10 @@ Do not run the build or the test suite locally to validate a change. Push and le
 it. The Gradle build has toolchain and plugin configuration that is not reproducible in a
 bare environment, so a local failure is weak evidence and a local pass is weaker.
 
-The sync workflow does not spend CI: its push uses `GITHUB_TOKEN`, which GitHub does not
-let retrigger workflows, so healing `dev` costs nothing even though `android.yml`
-triggers on pushes to `dev`.
+Healing `dev` does not cost a Gradle build: the sync workflow's push uses `GITHUB_TOKEN`,
+which GitHub does not let retrigger workflows, so no `android.yml` run starts even though
+it triggers on pushes to `dev`. The sync job itself still runs, but it is a handful of git
+commands on the smallest useful runner.
 
 ## Conventions
 

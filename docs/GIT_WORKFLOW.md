@@ -26,7 +26,7 @@ graph LR
   M -.->|automatic fast-forward| D
 ```
 
-`main` is the default branch. `dev` is the integration branch where day to day work
+`main` is the default branch. `dev` is the integration branch where day-to-day work
 lands. Batches of `dev` are promoted to `main` through a single promotion pull request.
 
 The dotted line is the part people miss. After anything lands on `main`, the sync
@@ -178,8 +178,11 @@ git checkout -b release/promote-dev-YYYY-MM-DD origin/dev
 git push -u origin release/promote-dev-YYYY-MM-DD
 ```
 
-Either way, merge it with **Create a merge commit**. The sync workflow fast-forwards
-`dev` on that merge, and the branches are back at parity within seconds.
+Either way, merge it with **Create a merge commit**. If `dev` has not moved on in the
+meantime, the sync workflow fast-forwards it onto that merge and the branches are back at
+parity within seconds. If `dev` has advanced, or the push is rejected because `dev` moved
+mid-run, the workflow takes one of the other cases in the table above instead, so read its
+run summary before assuming parity.
 
 ### Hotfix
 
