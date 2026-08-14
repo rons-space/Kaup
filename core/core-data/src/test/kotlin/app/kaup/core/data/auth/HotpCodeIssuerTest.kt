@@ -1,7 +1,7 @@
 package app.kaup.core.data.auth
 
 import app.kaup.core.data.KaupDatabase
-import app.kaup.core.data.crypto.HotpSecretUnrecoverableException
+import app.kaup.core.data.crypto.SealedSecretUnrecoverableException
 import app.kaup.core.data.testing.FakeSecretSealer
 import app.kaup.core.data.testing.TEST_SECRET
 import app.kaup.core.data.testing.inMemoryDatabase
@@ -119,7 +119,7 @@ class HotpCodeIssuerTest {
     @Test
     fun `an unreadable secret is reported, not thrown`() = runTest {
         database.insertUser(MANAGER, Role.MANAGER, sealedSecret, counter = 4L)
-        sealer.failure = HotpSecretUnrecoverableException("key invalidated")
+        sealer.failure = SealedSecretUnrecoverableException("key invalidated")
 
         val result = issuer.issue(MANAGER)
 

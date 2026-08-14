@@ -48,6 +48,9 @@ Implemented today:
   without invalidating existing PINs
 - PIN entry is rate limited by an escalating lockout that is persisted, so
   killing the app is not a way to reset the attempt counter
+- The database is encrypted at rest with SQLCipher. The passphrase is random
+  per device, never leaves it, and is sealed by an Android Keystore key under
+  its own alias, separate from the one protecting HOTP secrets (ADR-022)
 - HOTP secret keys are encrypted with a key held in Android Keystore, in
   StrongBox where the hardware provides it
 - Sessions are held in memory only and are never written to disk
@@ -69,7 +72,6 @@ Not implemented yet, each tracked by an issue:
 
 | Control | Status |
 |---|---|
-| Database encryption at rest | Not implemented. There is no SQLCipher or equivalent in the build |
 | AES-encrypted backups | Not implemented. The backup feature itself does not exist yet |
 | RBAC enforcement | Partial. The mechanism works and gates HOTP provisioning; the POS operations that most need it (void, refund, price override) are still placeholder screens |
 | Biometric enrollment | Not implemented, planned for v0.2-alpha |

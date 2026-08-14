@@ -27,6 +27,8 @@ serialization = "1.7.2"
 datetime = "0.6.1"
 kmpAppUpdater = "0.1.0"
 zxing = "3.5.3"
+sqlcipher = "4.17.0"
+androidxSqlite = "2.4.0"
 activity = "1.9.2"
 navigation = "2.8.0"
 lifecycle = "2.8.5"
@@ -65,6 +67,14 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite", version.ref = "material3Adaptive" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+# SQLCipher Community is BSD-style licensed, which satisfies the F-Droid rule
+# in CONTEXT.md, and F-Droid's inclusion policy permits prebuilt FLOSS
+# binaries from Maven Central. So this needs no flavor isolation, unlike the
+# sideload updater. The published POM declares aar packaging and depends on
+# androidx.sqlite, so no @aar suffix is needed; androidx.sqlite is pinned
+# below anyway because the SQLCipher docs call for it explicitly.
+sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
+androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidxSqlite" }
 javax-inject = { module = "javax.inject:javax.inject", version.ref = "javaxInject" }
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }

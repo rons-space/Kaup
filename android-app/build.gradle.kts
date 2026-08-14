@@ -95,6 +95,12 @@ dependencies {
     
     // Room runtime needed for DatabaseModule initialization
     implementation(libs.androidx.room.runtime)
+
+    // #159, encryption at rest. Declared here rather than in :core-data
+    // because DatabaseModule is what builds the database and holds the
+    // passphrase; :core-data only declares the schema.
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.sqlite)
     
     // DataStore needed for PreferencesModule
     implementation(libs.androidx.datastore.preferences)
