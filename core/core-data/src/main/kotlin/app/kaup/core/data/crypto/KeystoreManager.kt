@@ -15,21 +15,25 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Thrown when the Keystore key that protects the HOTP secret is gone or no
- * longer usable.
+ * A secret sealed by this key cannot be recovered.
  *
- * This is not the same as "decryption failed" and must not be reported as one.
- * The stored ciphertext is intact and permanently unreadable, so the only way
- * out is to provision a new HOTP secret. A caller that shows a generic error
- * leaves the manager tapping a button that can never work again.
+ * Raised when the Keystore entry is gone, has been invalidated, or the stored
+ * blob is not a well-formed sealed value. Never a transient condition: retrying
+ * cannot help, and the caller has to treat the plaintext as lost.
  */
-class HotpSecretUnrecoverableException(
+class SealedSecretUnrecoverableException(
     message: String,
     cause: Throwable? = null
 ) : Exception(message, cause)
 
 /**
- * Wraps the Android Keystore key that encrypts the HOTP secret at rest.
+ * Seals values with an AES-256-GCM key held in the Android Keystore.
+ *
+ * One instance owns one key, named by [alias]. Separate aliases per purpose is
+ * deliberate: the HOTP secrets and the database passphrase have different
+ * lifetimes and different consequences when they are lost, and sharing one key
+ * would mean re-provisioning a manager's authenticator could not be done
+ * without touching the key that opens the database.
  *
  * Two hardening decisions are deliberate omissions, recorded here because their
  * absence looks like an oversight:
@@ -45,19 +49,20 @@ class HotpSecretUnrecoverableException(
  *
  * `setUnlockedDeviceRequired(true)` is not set for the same reason, plus one
  * more: a till running an unattended order display is a normal deployment, and
- * that flag would break approvals on a locked screen.
+ * that flag would break approvals on a locked screen. For the database key it
+ * would be worse still, because the app could not open its own database while
+ * the screen was off.
  */
-@Singleton
-class KeystoreManager @Inject constructor() : SecretSealer {
-    private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    private val alias = "KaupHOTPSecretKey"
+abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
+
+    private val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
     private fun getOrGenerateKey(): SecretKey {
         if (!keyStore.containsAlias(alias)) {
             generateKey()
         }
         return keyStore.getKey(alias, null) as? SecretKey
-            ?: throw HotpSecretUnrecoverableException(
+            ?: throw SealedSecretUnrecoverableException(
                 "Keystore entry $alias is missing or is not a secret key"
             )
     }
@@ -65,7 +70,7 @@ class KeystoreManager @Inject constructor() : SecretSealer {
     private fun generateKey() {
         val keyGenerator = KeyGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_AES,
-            "AndroidKeyStore"
+            ANDROID_KEYSTORE
         )
 
         // StrongBox puts the key in dedicated tamper-resistant hardware, which
@@ -106,7 +111,7 @@ class KeystoreManager @Inject constructor() : SecretSealer {
             .build()
 
     override fun encrypt(data: ByteArray): String {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrGenerateKey())
         val iv = cipher.iv
         val encrypted = cipher.doFinal(data)
@@ -120,29 +125,29 @@ class KeystoreManager @Inject constructor() : SecretSealer {
     }
 
     /**
-     * @throws HotpSecretUnrecoverableException when the key is gone, the key is
-     *   no longer valid, or the stored blob is too short to contain an IV.
+     * @throws SealedSecretUnrecoverableException when the key is gone, the key
+     *   is no longer valid, or the stored blob is too short to contain an IV.
      */
     override fun decrypt(encryptedBase64: String): ByteArray {
         val combined = try {
             Base64.decode(encryptedBase64, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
-            throw HotpSecretUnrecoverableException("Stored HOTP secret is not valid Base64", e)
+            throw SealedSecretUnrecoverableException("Sealed value is not valid Base64", e)
         }
 
         // A truncated blob would otherwise fail as an index out of bounds from
         // deep inside a copy, which reads like a crash rather than a corrupt
         // record. GCM_IV_LENGTH + at least a tag has to be present.
         if (combined.size <= GCM_IV_LENGTH) {
-            throw HotpSecretUnrecoverableException(
-                "Stored HOTP secret is ${combined.size} bytes, too short to contain an IV"
+            throw SealedSecretUnrecoverableException(
+                "Sealed value is ${combined.size} bytes, too short to contain an IV"
             )
         }
 
         val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
         val encrypted = combined.copyOfRange(GCM_IV_LENGTH, combined.size)
 
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val cipher = Cipher.getInstance(TRANSFORMATION)
         val spec = GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
         try {
             cipher.init(Cipher.DECRYPT_MODE, getOrGenerateKey(), spec)
@@ -151,9 +156,8 @@ class KeystoreManager @Inject constructor() : SecretSealer {
             // example the device's secure lock screen was removed. Nothing can
             // recover the ciphertext, so say so precisely instead of letting a
             // generic failure suggest a retry might work.
-            throw HotpSecretUnrecoverableException(
-                "The Keystore key protecting the HOTP secret was invalidated; " +
-                    "the secret must be provisioned again",
+            throw SealedSecretUnrecoverableException(
+                "The Keystore key $alias was invalidated; anything it sealed is gone",
                 e
             )
         }
@@ -162,6 +166,9 @@ class KeystoreManager @Inject constructor() : SecretSealer {
     }
 
     private companion object {
+        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+
         /** GCM's standard IV length, in bytes. */
         const val GCM_IV_LENGTH = 12
 
@@ -169,3 +176,25 @@ class KeystoreManager @Inject constructor() : SecretSealer {
         const val GCM_TAG_LENGTH_BITS = 128
     }
 }
+
+/**
+ * Seals the per-manager HOTP secrets (ADR-005).
+ *
+ * Losing this key costs every manager a re-provisioning of their authenticator,
+ * which is recoverable by scanning a new QR code.
+ */
+@Singleton
+class KeystoreManager @Inject constructor() : AndroidKeystoreSealer(HOTP_SECRET_KEY_ALIAS)
+
+/**
+ * Seals the SQLCipher passphrase (ADR-022, #159).
+ *
+ * Deliberately a different key from [KeystoreManager]. Losing this one costs
+ * the entire database, which is a categorically worse outcome than losing the
+ * HOTP secrets, so the two should not be able to take each other down.
+ */
+@Singleton
+class DatabaseKeySealer @Inject constructor() : AndroidKeystoreSealer(DATABASE_KEY_ALIAS)
+
+private const val HOTP_SECRET_KEY_ALIAS = "KaupHOTPSecretKey"
+private const val DATABASE_KEY_ALIAS = "KaupDatabaseKey"

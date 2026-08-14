@@ -28,7 +28,7 @@ interface SecretSealer {
     /**
      * Reverses [encrypt].
      *
-     * @throws HotpSecretUnrecoverableException if the sealing key is gone or no
+     * @throws SealedSecretUnrecoverableException if the sealing key is gone or no
      * longer usable, which on a real device means the user changed their lock
      * screen credential or the key was invalidated. Callers must treat this as
      * "this secret is gone forever", not as a transient failure.

@@ -13,6 +13,7 @@ import app.kaup.core.data.dao.StockMovementDao
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.LocationEntity
 import app.kaup.shared.models.SyncStatus
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,13 +28,25 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        passphrase: DatabasePassphrase
     ): KaupDatabase {
+        // Must happen before anything touches the database. The SQLCipher core
+        // is a native library bundled in the AAR and the Java layer does not
+        // load it for you.
+        System.loadLibrary("sqlcipher")
+
         val builder = Room.databaseBuilder(
             context,
             KaupDatabase::class.java,
-            "kaup_database"
-        ).addCallback(SeedDefaultLocation)
+            DATABASE_NAME
+        )
+            // #159. The passphrase array is deliberately not zeroed after this
+            // call: Room opens the database lazily and the factory keeps the
+            // reference, so wiping it would hand SQLCipher a zeroed key. See
+            // DatabasePassphrase.getOrCreate.
+            .openHelperFactory(SupportOpenHelperFactory(passphrase.getOrCreate()))
+            .addCallback(SeedDefaultLocation)
 
         // Two conditions, not one (#203). The constant is the intent, declared
         // next to the schema it applies to. The version check is the guardrail:

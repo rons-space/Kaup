@@ -3,7 +3,7 @@ package app.kaup.core.data.testing
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.kaup.core.data.KaupDatabase
-import app.kaup.core.data.crypto.HotpSecretUnrecoverableException
+import app.kaup.core.data.crypto.SealedSecretUnrecoverableException
 import app.kaup.core.data.crypto.SecretSealer
 import app.kaup.core.data.entities.LocationEntity
 import app.kaup.core.data.entities.UserEntity
@@ -54,7 +54,7 @@ internal val TEST_SECRET: ByteArray = ByteArray(20) { index -> (index + 1).toByt
  * user changes their lock screen credential and the key is invalidated.
  */
 internal class FakeSecretSealer(
-    var failure: HotpSecretUnrecoverableException? = null
+    var failure: SealedSecretUnrecoverableException? = null
 ) : SecretSealer {
 
     override fun encrypt(data: ByteArray): String =

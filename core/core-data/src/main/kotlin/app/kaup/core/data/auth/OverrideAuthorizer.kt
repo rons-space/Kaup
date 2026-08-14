@@ -2,7 +2,7 @@ package app.kaup.core.data.auth
 
 import androidx.room.withTransaction
 import app.kaup.core.data.KaupDatabase
-import app.kaup.core.data.crypto.HotpSecretUnrecoverableException
+import app.kaup.core.data.crypto.SealedSecretUnrecoverableException
 import app.kaup.core.data.crypto.SecretSealer
 import app.kaup.core.data.dao.OverrideLogDao
 import app.kaup.core.data.dao.UserDao
@@ -160,7 +160,7 @@ class OverrideAuthorizer @Inject constructor(
 
         val secret = try {
             secretSealer.decrypt(encrypted)
-        } catch (e: HotpSecretUnrecoverableException) {
+        } catch (e: SealedSecretUnrecoverableException) {
             return@withContext OverrideResult.Unavailable(
                 e.message ?: "The stored HOTP secret cannot be read"
             )
