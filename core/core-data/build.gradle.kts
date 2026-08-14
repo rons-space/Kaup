@@ -27,6 +27,23 @@ android {
     }
 }
 
+// Robolectric cannot run on the JDK that builds this project. It instruments
+// bytecode with ASM and walks the type hierarchy of everything it loads, which
+// reaches the running JDK's own class files; ASM refuses any class file version
+// newer than it knows about, and CI runs JDK 26. The symptom is every test in
+// the module failing identically inside ClassReader, before any assertion.
+//
+// Forking just the test JVM onto the toolchain that matches the bytecode target
+// keeps that contained: compilation and the rest of the build stay on 26. The
+// workflow installs both JDKs.
+tasks.withType<Test>().configureEach {
+    javaLauncher.set(
+        extensions.getByType(JavaToolchainService::class.java).launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(libs.versions.javaTarget.get()))
+        }
+    )
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
