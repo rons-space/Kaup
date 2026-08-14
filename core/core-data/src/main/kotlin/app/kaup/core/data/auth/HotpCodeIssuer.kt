@@ -2,8 +2,8 @@ package app.kaup.core.data.auth
 
 import androidx.room.withTransaction
 import app.kaup.core.data.KaupDatabase
-import app.kaup.core.data.crypto.HotpSecretUnrecoverableException
-import app.kaup.core.data.crypto.KeystoreManager
+import app.kaup.core.data.crypto.SealedSecretUnrecoverableException
+import app.kaup.core.data.crypto.SecretSealer
 import app.kaup.core.data.dao.UserDao
 import app.kaup.shared.domain.HOTPGenerator
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +39,7 @@ sealed interface HotpCodeResult {
 class HotpCodeIssuer @Inject constructor(
     private val database: KaupDatabase,
     private val userDao: UserDao,
-    private val keystoreManager: KeystoreManager
+    private val secretSealer: SecretSealer
 ) {
 
     suspend fun issue(userId: String): HotpCodeResult = withContext(Dispatchers.IO) {
@@ -49,8 +49,8 @@ class HotpCodeIssuer @Inject constructor(
             ?: return@withContext HotpCodeResult.NotProvisioned
 
         val secret = try {
-            keystoreManager.decrypt(encrypted)
-        } catch (e: HotpSecretUnrecoverableException) {
+            secretSealer.decrypt(encrypted)
+        } catch (e: SealedSecretUnrecoverableException) {
             return@withContext HotpCodeResult.Unavailable(
                 e.message ?: "The stored HOTP secret cannot be read"
             )

@@ -18,6 +18,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // #178: see the note in :core-data.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
+
     flavorDimensions += "distribution"
     productFlavors {
         // ADR-014: the flavors differ in exactly one thing, how the app is
@@ -40,6 +46,7 @@ android {
 
     sourceSets {
         getByName("main") { kotlin.srcDir("src/main/kotlin") }
+        getByName("test") { kotlin.srcDir("src/test/kotlin") }
         getByName("github") { kotlin.srcDir("src/github/kotlin") }
         getByName("fdroid") { kotlin.srcDir("src/fdroid/kotlin") }
         getByName("playstore") { kotlin.srcDir("src/playstore/kotlin") }
@@ -54,6 +61,10 @@ android {
 
     buildFeatures {
         compose = true
+        // Needed by the #203 guardrail: DatabaseModule compares
+        // BuildConfig.VERSION_NAME against the ADR-018 Phase 1 window before
+        // arming the destructive fallback.
+        buildConfig = true
     }
 }
 
@@ -75,7 +86,7 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     
     implementation(libs.androidx.work.runtime.ktx)
@@ -84,9 +95,17 @@ dependencies {
     
     // Room runtime needed for DatabaseModule initialization
     implementation(libs.androidx.room.runtime)
+
+    // #159, encryption at rest. Declared here rather than in :core-data
+    // because DatabaseModule is what builds the database and holds the
+    // passphrase; :core-data only declares the schema.
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.sqlite)
     
     // DataStore needed for PreferencesModule
     implementation(libs.androidx.datastore.preferences)
+
+    testImplementation(libs.junit)
 
     // Sideload updater, github flavor only. Declaring it per flavor is what
     // keeps a self-update path out of the Play Store build, which Play policy

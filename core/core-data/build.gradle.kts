@@ -10,6 +10,43 @@ android {
     defaultConfig {
         minSdk = 24
     }
+
+    // #178: pin the bytecode level instead of inheriting it from whichever JDK
+    // runs Gradle. Under AGP 9 built-in Kotlin, Kotlin's jvmTarget defaults to
+    // targetCompatibility, so this pins both compilers with one setting.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
+
+    // Robolectric needs the merged resources and the manifest to stand up an
+    // Android runtime on the JVM. Without this the tests fail at startup rather
+    // than on an assertion.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// Robolectric cannot run on the JDK that builds this project. It instruments
+// bytecode with ASM and walks the type hierarchy of everything it loads, which
+// reaches the running JDK's own class files; ASM refuses any class file version
+// newer than it knows about, and CI runs JDK 26. The symptom is every test in
+// the module failing identically inside ClassReader, before any assertion.
+//
+// Forking just the test JVM onto the toolchain that matches the bytecode target
+// keeps that contained: compilation and the rest of the build stay on 26. The
+// workflow installs both JDKs.
+// Resolved at project scope, not inside configureEach: inside the block
+// `extensions` is the Test task's own container, which holds nothing but extra
+// properties.
+val testJavaLauncher = project.extensions
+    .getByType(JavaToolchainService::class.java)
+    .launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(libs.versions.javaTarget.get()))
+    }
+
+tasks.withType<Test>().configureEach {
+    javaLauncher.set(testJavaLauncher)
 }
 
 ksp {
@@ -50,5 +87,14 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     // JSR-330 for @Inject / @Singleton
-    implementation("javax.inject:javax.inject:1")
+    implementation(libs.javax.inject)
+
+    // #174. These tests run on the JVM under Robolectric rather than as
+    // instrumented tests, because CI has no emulator: ./gradlew build never
+    // runs connectedAndroidTest, so anything in androidTest would be code that
+    // never executes and therefore never gates anything.
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

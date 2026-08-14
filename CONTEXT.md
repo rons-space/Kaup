@@ -14,10 +14,10 @@ cloud. Targets retail, F&B, and market stalls in any country.
 
 **Package name**: `app.kaup.android`
 **Language**: Kotlin (Kotlin Multiplatform for shared domain logic)
-**Min SDK**: API 26 | **Target SDK**: latest stable
+**Min SDK**: API 24 | **Target SDK**: latest stable
 **UI**: Jetpack Compose + Material 3 Expressive
 **DI**: Hilt
-**Database**: Room (local; at-rest encryption is planned, not yet implemented)
+**Database**: Room (local, encrypted at rest with SQLCipher; see ADR-022)
 **Sync**: WorkManager queue → pluggable `SyncBackend` interface
 **Server**: Optional Ktor (self-hosted, Docker Compose)
 **Build flavors**: `github`, `fdroid`, `playstore`
@@ -192,7 +192,7 @@ modules in `:android-app/src/<flavorName>/`.
   `locationId` FK → `locations.id`. Single default location is seeded on
   first launch. Never omit `locationId` from a new location-aware entity.
 - **Schema export**: enabled via KSP arg `room.schemaLocation` — JSON files
-  committed to `/app/schemas/`
+  committed to `core/core-data/schemas/`
 
 ---
 

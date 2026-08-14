@@ -1,7 +1,19 @@
 [versions]
 agp = "9.2.0"
-kotlin = "2.1.0"
-ksp = "2.1.0-1.0.29"
+# AGP 9.0 carries a runtime dependency on the Kotlin Gradle plugin and silently
+# upgrades anything below 2.2.10 to 2.2.10, and any KSP below 2.2.10-2.0.2 to
+# match. This file used to say 2.1.0, so the declared version and the version
+# that actually compiled the code were different numbers, which is the kind of
+# skew #178 is about. These now state what the build really resolves.
+kotlin = "2.2.10"
+ksp = "2.2.10-2.0.2"
+# The bytecode level every module targets. Pinned rather than inherited from
+# whichever JDK happens to run Gradle: CI runs Temurin 26, a developer machine
+# runs something else, and without this the two produce different class files
+# from identical source. With AGP 9 built-in Kotlin, setting
+# compileOptions.targetCompatibility also fixes Kotlin's jvmTarget, which is
+# why no module sets that separately.
+javaTarget = "17"
 compose-bom = "2024.09.02"
 coroutines = "1.9.0"
 # No ktor version is pinned here on purpose. Nothing depends on Ktor yet, and
@@ -9,14 +21,27 @@ coroutines = "1.9.0"
 # Whoever adds the Ktor client or the server module pins a current version then.
 room = "2.6.1"
 hilt = "2.59.2"
+androidxHilt = "1.2.0"
 workmanager = "2.9.1"
 serialization = "1.7.2"
 datetime = "0.6.1"
 kmpAppUpdater = "0.1.0"
 zxing = "3.5.3"
+sqlcipher = "4.17.0"
+androidxSqlite = "2.4.0"
+activity = "1.9.2"
+navigation = "2.8.0"
+lifecycle = "2.8.5"
+datastore = "1.1.1"
+material3Adaptive = "1.3.0"
+javaxInject = "1"
+junit = "4.13.2"
+robolectric = "4.14.1"
+androidxTest = "1.6.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "serialization" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 kmp-app-updater-core = { module = "com.pavi2410.kmp-app-updater:core", version.ref = "kmpAppUpdater" }
@@ -29,17 +54,31 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.9.2" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity" }
 
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workmanager" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
-androidx-hilt-work = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
-androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version = "1.2.0" }
-androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version = "2.8.0" }
-androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite", version = "1.3.0" }
-androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version = "1.1.1" }
+androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "androidxHilt" }
+androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "androidxHilt" }
+androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "androidxHilt" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite", version.ref = "material3Adaptive" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+# SQLCipher Community is BSD-style licensed, which satisfies the F-Droid rule
+# in CONTEXT.md, and F-Droid's inclusion policy permits prebuilt FLOSS
+# binaries from Maven Central. So this needs no flavor isolation, unlike the
+# sideload updater. The published POM declares aar packaging and depends on
+# androidx.sqlite, so no @aar suffix is needed; androidx.sqlite is pinned
+# below anyway because the SQLCipher docs call for it explicitly.
+sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
+androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidxSqlite" }
+javax-inject = { module = "javax.inject:javax.inject", version.ref = "javaxInject" }
+junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

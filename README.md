@@ -21,8 +21,9 @@ stop working the moment your internet drops. Kaup does not.
 - **Offline-first** — every sale, stock movement, and receipt works with no
   internet connection, always
 - **Your data, your device** — all data is stored locally in a Room database on
-  your device; you own it. At-rest encryption of that database is planned and
-  not yet implemented, so do not run an alpha build in a real store
+  your device, encrypted at rest with SQLCipher under a key your device holds in
+  hardware; you own it. Alpha builds still recreate that database on a schema
+  change (ADR-018), so do not run one in a real store yet
 - **No subscription** — free forever under GPL v3; no paywalled features
 - **No vendor lock-in** — sync is optional and pluggable; use your own server,
   Supabase, Appwrite, or nothing at all
@@ -99,7 +100,7 @@ updates Kaup automatically — no app store needed.
 ### Requirements
 - Android Studio Meerkat or later
 - JDK 17 or later
-- Android SDK — API 26 minimum, latest stable target
+- Android SDK — API 24 minimum, latest stable target
 
 ```bash
 # Clone
@@ -129,7 +130,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development setup guide.
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and security policy |
 | [docs/architecture.md](docs/architecture.md) | Data flow, sync lifecycle, auth flow |
 | [docs/modules.md](docs/modules.md) | Every module — what it owns and what it does not |
-| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001 to ADR-021) |
+| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001 to ADR-022) |
 | [docs/personas.md](docs/personas.md) | User personas that drive product decisions |
 | [docs/setup-tier1.md](docs/setup-tier1.md) | Self-hosted Ktor server setup guide |
 | [docs/setup-supabase.md](docs/setup-supabase.md) | Supabase sync backend setup guide |
@@ -161,6 +162,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development setup guide.
 | [ADR-019](docs/adr/ADR-019-money-and-rounding-contract.md) | Money representation and rounding contract |
 | [ADR-020](docs/adr/ADR-020-offline-conflict-resolution.md) | Offline conflict resolution policy |
 | [ADR-021](docs/adr/ADR-021-authorization-enforcement-model.md) | Authorization enforcement and manager override model |
+| [ADR-022](docs/adr/ADR-022-database-encryption-at-rest.md) | Database encryption at rest |
 
 ---
 

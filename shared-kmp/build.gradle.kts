@@ -1,8 +1,16 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// #178: the Android modules pin this through android.compileOptions, which
+// AGP's built-in Kotlin propagates to jvmTarget for them. This module does not
+// use built-in Kotlin, so its JVM-flavoured targets are pinned by hand from the
+// same catalog value rather than defaulting to whatever JDK runs Gradle.
+val javaTarget = JvmTarget.fromTarget(libs.versions.javaTarget.get())
 
 kotlin {
 
@@ -11,9 +19,16 @@ kotlin {
         compileSdk = 36
         minSdk = 24
         withHostTest {}
+        compilerOptions {
+            jvmTarget.set(javaTarget)
+        }
     }
 
-    jvm()
+    jvm {
+        compilerOptions {
+            jvmTarget.set(javaTarget)
+        }
+    }
 
     sourceSets {
         commonMain.dependencies {
@@ -27,7 +42,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
