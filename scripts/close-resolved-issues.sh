@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Closes the code review findings that sprints 0 through 3 actually resolved.
+# Closes the code review findings that sprints 0 through 4 actually resolved.
 #
 # Why this script exists: GitHub only auto-closes an issue when the pull request
 # that references it merges into the *default* branch. Every sprint PR targets
@@ -73,6 +73,23 @@ close 170 "Fixed in #268: stock is a Quantity, a scaled integer of thousandths, 
 close 171 "Fixed in #268: ADR-020 states the policy and ConflictResolver.resolve implements it. Total order by timestamp, deviceId then id; duplicates dropped by id with content divergence surfaced separately; timeline, final stock and violations returned from one replay. No last-write-wins anywhere, because the log is append-only and authoritative."
 close 200 "Fixed in #268: detectNegativeStockViolations returns a StockViolation per movement that leaves stock negative, carrying the level after it and a flag on the first breach. It previously reported only the crossing event, hiding how deep an oversell went."
 
+echo "Sprint 4 part one — the authorization domain (PR #272)"
+close 186 "Fixed across #272 and #273: validateCode compares in constant time and runs the whole look-ahead window even after a match, because returning early leaked how far the manager's counter had drifted, and drift is what narrows a guess. The window is 10 per ADR-005, not 5. OverrideThrottlePolicy adds the RFC 4226 section 7.3 throttle: three attempts, then doubling from a minute to a half hour, persisted against the manager so it survives process death. The caller advances the counter to matched + 1 in the same transaction as the grant, which also kills every code behind an accepted drifted one."
+
+echo "Sprint 4 part two — the override data layer (PR #273)"
+close 176 "Fixed in #273: HotpCodeIssuer reads and advances the counter in one transaction, guarded by the value it read. The counter previously came from the SessionManager snapshot taken at login, which the update never refreshed, so every code generated in a session was the same code."
+close 193 "Fixed in #273 by removing the column rather than authenticating it. A Keystore MAC over permissionsOverride would have been theatre while the role column beside it stayed equally forgeable in a plaintext database, and nothing ever wrote the column. Permissions derive from role; per-user grants return when sync can sign them. Row integrity against someone holding the database file is #159. Reasoning in ADR-021."
+close 195 "Fixed in #273: StrongBox is used where the hardware provides it, with the fallback driven by catching StrongBoxUnavailableException rather than a feature flag that can disagree with reality, and KeyPermanentlyInvalidatedException now surfaces as HotpSecretUnrecoverableException so the UI can say the secret must be provisioned again instead of inviting a retry that can never work. setUserAuthenticationRequired and setUnlockedDeviceRequired are deliberately NOT set, and the class comment records why: a POS terminal is often a shared device with no secure lock screen, where the first makes the key unusable outright, and an unattended order display would be broken by the second. ADR-005 option E covers biometric-gated generation as an opt-in setting."
+
+echo "Sprint 4 part three — screen security and resources (PR #274)"
+close 194 "Fixed in #274: FLAG_SECURE via SecureScreen() on the provisioning, override code and lock screens; the Base32 secret is hidden behind an explicit reveal instead of being displayed throughout scanning; and the raw bytes are zeroed in a finally block and again in onCleared. The Base32 String cannot be zeroed, which is stated on the ViewModel rather than papered over, and it is dropped from the UI state on completion."
+close 196 "Fixed in #274: a real vector launcher icon, adaptive on API 26+ with a layer-list for 24 and 25, replaces @android:drawable/sym_def_app_icon; Theme.Kaup with a values-night counterpart replaces @android:style/Theme.NoTitleBar; android:label moves to @string/app_name; and FLAG_SECURE is on the lock screen. Migrating the remaining hardcoded screen copy is #189."
+
+echo "Sprint 4 part four — end to end wiring (PR #275)"
+close 166 "Fixed in #275: the overlay is presentational and cannot approve anything, :core-ui has no access to :core-data, and a ViewModel in :feature-auth submits to OverrideAuthorizer. HOTP provisioning is gated on USERS_EDIT end to end: permission check, overlay on denial, constant-time validation, per-manager throttling, transactional counter consumption and audit write. The grant is a capability, not a boolean: saveAndComplete re-reads the override_log row and checks its permission, requester and age before writing. Provisioning rather than a POS void because the POS screens are still placeholders and gating a fake one would be the shape-without-substance this finding is about."
+close 219 "Fixed in #272 and #275: OverrideScope models both ADR-005 scopes, elevation tokens are in-memory and single use and carry the granting manager's own permission set, the window defaults to five minutes with a fifteen minute ceiling, the UI warns before issuing one, and Settings has the admin switch that disables them. Turning it off cancels tokens already in flight, because the switch is checked at redemption as well as at issue. The limitation is documented in ADR-021: scope is not carried inside the code, because an RFC 4226 HOTP is an HMAC over a counter with no field for a permission, so it is enforced by the validating device and recorded in the audit row."
+close 220 "Fixed in #273: a validated code advances the counter and writes an override_log row naming the approver, the requester, the permission, the transaction, the scope and the counter consumed, all in one transaction. Rows carry syncStatus like every other entity. The table has no foreign key to users on purpose, because an audit record must outlive the account it names."
+
 echo
 echo "Deliberately NOT closed:"
 echo "  #159  the encryption claims were withdrawn, but the database is still"
@@ -80,10 +97,15 @@ echo "        plaintext. There is no SQLCipher anywhere. Real work remains."
 echo "  #178  the vulnerable ktor pin is gone and the build is proven green,"
 echo "        but the toolchain skew half of the finding is unreviewed."
 echo "  #203  ALPHA_DESTRUCTIVE_MIGRATION exists with a TODO, but nothing"
-echo "        enforces its removal before v0.2-alpha. Note the destructive"
-echo "        migration window closes at v0.2-alpha and schema 6 has landed,"
-echo "        so this is now the binding constraint on the next schema change."
+echo "        enforces its removal before v0.2-alpha. Schema 7 has now landed"
+echo "        inside the destructive window, so this is still the binding"
+echo "        constraint on the next schema change."
 echo
-echo "Still open and worth knowing: #269 moves LineItem.quantity to Quantity,"
-echo "the last Double in the money path. Not a schema change, so it is not"
-echo "gated on the v0.2-alpha migration window."
+echo "Still open and worth knowing:"
+echo "  #269  moves LineItem.quantity to Quantity, the last Double in the money"
+echo "        path. Not a schema change, so it is not gated on the migration"
+echo "        window."
+echo "  #174  :core-data and :feature-auth still have no test harness, so the"
+echo "        transactional glue added in sprint 4, OverrideAuthorizer and"
+echo "        HotpCodeIssuer, has no automated coverage. The pure policy under"
+echo "        it does. This is the largest known gap in sprint 4."
