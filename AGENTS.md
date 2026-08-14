@@ -5,7 +5,8 @@ Jetpack Compose (Material 3), Hilt and Room, distributed under GPL v3. This file
 the conventions that are not discoverable from the code and that cause real damage when
 guessed at. [`CONTEXT.md`](CONTEXT.md) is the primary architecture and conventions
 reference; read it, and read [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) before doing
-anything involving branches or merges.
+anything involving branches or merges. Branch naming and commit message format live in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Branching, in one paragraph
 
@@ -33,7 +34,10 @@ There is currently no automated test CI in this repository; the only workflow is
 branch-sync workflow above. Validation of code changes relies on the local Gradle build
 and the `kotlin.test` suites in `commonTest`. Do not assume a green pipeline exists to
 catch mistakes; when CI is added, prefer letting it run the full suite rather than
-treating a local full build as a prerequisite for every change.
+treating a local full build as a prerequisite for every change. Any new workflow should
+run on Blacksmith runners (`blacksmith-4vcpu-ubuntu-2404`, matching the sync workflow)
+and should use `paths-ignore` for `**.md` and `docs/**` so documentation-only changes
+cost nothing.
 
 Match the surrounding code. This repository favours explanatory comments that record
 *why* a non-obvious choice was made, especially in build configuration, migrations and

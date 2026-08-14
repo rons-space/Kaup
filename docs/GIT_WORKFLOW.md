@@ -149,7 +149,8 @@ git push -u origin fix/some-thing
 ```
 
 Base it on `dev`, target `dev`. Any merge method is fine here, since these do not land on
-`main` directly.
+`main` directly. Branch naming and commit message conventions are in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ### Promotion
 
@@ -189,7 +190,7 @@ git rev-list --left-right --count origin/dev...origin/main
 git merge-base --is-ancestor origin/dev origin/main && echo yes || echo no
 
 # Which merge methods does the repository allow?
-gh api repos/rons-space/Kaup \
+gh api 'repos/{owner}/{repo}' \
   --jq '{merge: .allow_merge_commit, squash: .allow_squash_merge, rebase: .allow_rebase_merge}'
 ```
 
