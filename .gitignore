@@ -6,13 +6,17 @@ build/
 local.properties
 
 # IDE files
+# The whole directory is ignored: the previously tracked subset still carried
+# per-developer paths and JDK names, which produced noise in every review.
 *.iml
-.idea/caches
-.idea/libraries
-.idea/modules.xml
-.idea/workspace.xml
-.idea/navEditor.xml
-.idea/assetWizardSettings.xml
+.idea/
+
+# Signing material. Release signing lands with the release workflow, and a
+# keystore committed by accident cannot be un-leaked.
+*.jks
+*.keystore
+keystore.properties
+signing.properties
 
 # Built application files
 *.apk

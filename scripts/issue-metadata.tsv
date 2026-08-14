@@ -1,0 +1,103 @@
+158	code-review,severity-critical,must-have,sprint-1	v0.1-alpha	[C1] PIN is stored and compared in plaintext, in a column named `pinHash`
+159	code-review,severity-critical,must-have,sprint-0	v0.1-alpha	[C2] The database is not encrypted, contradicting three documentation claims
+160	code-review,severity-critical,must-have,sprint-0	v0.1-alpha	[C3] A GPL v3 project ships no LICENSE file
+161	code-review,severity-critical,must-have,sprint-0	v0.1-alpha	[C4] No module applies the Kotlin Android plugin (likely already resolved)
+162	code-review,severity-critical,must-have,sprint-0	v0.1-alpha	[C5] A 5 or 6 digit PIN permanently locks the owner out of the app
+163	code-review,severity-critical,must-have,sprint-0	v0.1-alpha	[C6] `allowBackup="true"` makes the plaintext database and PIN extractable
+164	code-review,severity-high,must-have,sprint-1	v0.1-alpha	[H1] The default location is never seeded, while `locationId` is a non-null foreign key
+165	code-review,severity-high,must-have,sprint-0	v0.1-alpha	[H2] `gradlew` is committed non-executable, so every documented build command fails
+166	code-review,severity-high,must-have,sprint-4	v0.1-alpha	[H3] RBAC, manager approval and HOTP validation are entirely dead code
+167	code-review,severity-high,must-have,sprint-1	v0.1-alpha	[H4] No rate limiting or lockout on PIN entry
+168	code-review,severity-high,must-have,sprint-2	v0.1-alpha	[H5] Duplicate parallel domain hierarchies, and the ADR-canonical interfaces are the dead ones
+169	code-review,severity-high,must-have,sprint-3,decision-needed	v0.1-alpha	[H6] Money arithmetic is routed through `Double` and the totals do not reconcile
+170	code-review,severity-high,must-have,sprint-3	v0.1-alpha	[H7] Inventory stock is accumulated in `Double`, contradicting ADR-002
+171	code-review,severity-high,must-have,sprint-3,decision-needed	v0.1-alpha	[H8] `ConflictResolver` contains no conflict resolution
+172	code-review,severity-high,must-have,sprint-1	v0.1-alpha	[H9] `syncStatus` exists on one of four Room entities
+173	code-review,severity-high,must-have,sprint-0	v0.1-alpha	[H10] CI gaps: no flavor or release builds, no static analysis, broken README badge
+174	code-review,severity-high,must-have,sprint-5	v0.1-alpha	[H11] Zero tests in all five Android modules
+175	code-review,severity-high,must-have,sprint-5	v0.1-alpha	[H12] The sync stack is inert end to end
+176	code-review,severity-high,must-have,sprint-4	v0.1-alpha	[H13] Override codes are reissued identically within a session, from a stale HOTP counter
+177	code-review,severity-high,must-have,sprint-0	v0.1-alpha	[H14] `SECURITY.md` documents security controls that do not exist
+178	code-review,severity-high,must-have,sprint-0	v0.1-alpha	[H15] Toolchain skew, an unproven build, and a known-vulnerable Ktor version
+179	code-review,severity-medium,must-have,sprint-0	v0.1-alpha	[M1] The release build cannot succeed: `proguard-rules.pro` does not exist
+180	code-review,severity-medium,must-have,sprint-2	v0.1-alpha	[M2] Build flavors are declared but no flavor source sets exist
+181	code-review,severity-medium,must-have,sprint-2	v0.1-alpha	[M3] The app updater ships in the F-Droid flavor, violating a stated non-negotiable
+182	code-review,severity-medium,must-have,sprint-1	v0.1-alpha	[M4] `RoleConverter` crashes on any unrecognised role value
+183	code-review,severity-medium,must-have,sprint-5	v0.1-alpha	[M5] The documented product is roughly ten times the implemented one
+184	code-review,severity-medium,must-have,sprint-5	v0.1-alpha	[M6] The three backend setup guides describe infrastructure that does not exist
+185	code-review,severity-medium,must-have,sprint-5	v0.1-alpha	[M7] ADR compliance is partial, and four ADRs have no implementation at all
+186	code-review,severity-medium,must-have,sprint-4	v0.1-alpha	[M8] HOTP validation is timing-unsafe, permits replay, and uses the wrong window
+187	code-review,severity-medium,must-have,sprint-5	v0.1-alpha	[M9] `minSdk` is 24, but the documentation states API 26
+188	code-review,severity-medium,must-have,sprint-1	v0.1-alpha	[M10] No `DATABASE_VERSION` constant, and one schema version has no schema change
+189	code-review,severity-medium,must-have,sprint-5	v0.1-alpha	[M11] No `res/` directory and no `strings.xml`, so localisation is blocked
+190	code-review,severity-medium,must-have,sprint-2	v0.1-alpha	[M12] `CONTEXT.md` contradicts itself on `:core-network` dependencies
+191	code-review,severity-medium,must-have,sprint-0	v0.1-alpha	[M13] Broken documentation links
+192	code-review,severity-medium,must-have,sprint-1	v0.1-alpha	[M14] `StockMovementEntity` drifts from the domain `StockMovement` model
+193	code-review,severity-medium,must-have,sprint-4	v0.1-alpha	[M15] `SessionManager` trusts `permissionsOverride` read from the plaintext database
+194	code-review,severity-medium,must-have,sprint-4	v0.1-alpha	[M16] The HOTP secret is displayed in plaintext during provisioning and is never zeroed
+195	code-review,severity-low,must-have,sprint-4	v0.1-alpha	[L1] `KeystoreManager` could take three further hardening steps
+196	code-review,severity-low,must-have,sprint-4	v0.1-alpha	[L2] Placeholder application resources, and no `FLAG_SECURE`
+197	code-review,severity-low,must-have,sprint-5	v0.1-alpha	[L3] Code hygiene, and no logging abstraction at all
+198	code-review,severity-low,must-have,sprint-5	v0.1-alpha	[L4] Two of fourteen commits follow the project's own commit format
+199	code-review,severity-low,must-have,sprint-5	v0.1-alpha	[L5] Five dependency coordinates bypass the version catalog
+200	code-review,severity-low,must-have,sprint-3	v0.1-alpha	[L6] `detectNegativeStockViolations` reports only the crossing event
+201	code-review,severity-low,must-have,sprint-3	v0.1-alpha	[L7] `Money` arithmetic is unchecked and can silently overflow
+202	code-review,severity-low,must-have,sprint-0	v0.1-alpha	[L8] Repository hygiene: committed IDE files, gaps in `.gitignore`, a dead catalog entry
+203	code-review,severity-low,must-have,sprint-1	v0.1-alpha	[L9] The alpha destructive migration has no removal guardrail
+204	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] Device identity: `deviceId` on stock movements and device registration
+205	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] `PrinterService` abstraction in `:core-data`
+206	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] Backup and restore file I/O and media path helpers in `:core-data`
+207	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] `PaymentGateway` interface and `CaptureOnlyGateway` default
+208	roadmap-gap,must-have,sprint-2	v0.1-alpha	[gap] `Permission` catalogue constants and `RoleDefaults`
+209	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] DataStore-backed settings persistence layer
+210	roadmap-gap,must-have,sprint-2	v0.1-alpha	[gap] `FeatureFlags` object, conditional nav-graph registration, and flag-gated DAO and WorkManager init
+211	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Runtime rebinding of `SyncBackend` when the backend tier changes
+212	roadmap-gap,must-have,sprint-1	v0.1-alpha	[gap] Backend credentials stored in Android Keystore
+213	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Processing mode behaviour: Standalone and Assisted write paths, plus reachability detection
+214	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] WorkManager sync triggers beyond the periodic job
+215	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Sync queue batching from the `sync_queue` table
+216	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Tier 0 must not surface perpetual PENDING as an error
+217	roadmap-gap,must-have,sprint-3	v0.1-alpha	[gap] Write `fulfillment_status = PENDING_STOCK` and alert the manager on negative stock
+218	roadmap-gap,must-have,sprint-3	v0.1-alpha	[gap] Maintain the denormalized `currentStock` column on every movement write
+219	roadmap-gap,must-have,sprint-4	v0.1-alpha	[gap] Override code scope model: single action versus time-boxed elevation token
+220	roadmap-gap,must-have,sprint-4	v0.1-alpha	[gap] Override code single-use consumption and `OverrideLog` write
+221	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Ktor server: authentication endpoints and JWT issuance
+222	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Ktor server: sync and file endpoints
+223	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Ktor server: HTTPS enforced on LAN, rate limiting and input validation
+224	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Ktor server: Exposed schema mirroring Room, plus Flyway migrations
+225	roadmap-gap,must-have,sprint-0	v0.1-alpha	[gap] Release signing: keystore, CI secrets and `signingConfigs`
+226	roadmap-gap,must-have,sprint-0	v0.1-alpha	[gap] Release workflow: tag, build three flavors, sign, attach to the GitHub Release
+227	roadmap-gap,must-have,sprint-0	v0.1-alpha	[gap] `RELEASING.md`: release checklist, tagging and the alpha data-loss warning
+228	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Test gate: unit coverage for every `:shared-kmp/domain` class
+229	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Test gate: per-feature integration tests against in-memory Room
+230	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] Test gate: the four end-to-end UI flows
+231	roadmap-gap,must-have,sprint-2	v0.1-alpha	[gap] `foss` base flavor and exclusion of `kmp-app-updater` from the `playstore` source set
+232	roadmap-gap,must-have,sprint-5	v0.1-alpha	[gap] In-app update UI and install path for the `github` flavor
+233	roadmap-gap,must-have,sprint-2,decision-needed	v0.1-alpha	[gap] Decision: `ManagerApprovalOverlay` and the `LockScreen` shell live in `:core-ui`, not `:feature-auth`
+234	roadmap-gap,must-have,sprint-2,decision-needed	v0.1-alpha	[gap] Decision: the fourth role is WAITER or CREW, not both
+235	roadmap-gap,must-have,decision-needed	v0.1-alpha	[gap] Decision: reconcile the Tier 2 and Tier 3 definitions
+236	roadmap-gap,should-have,decision-needed	v0.2-alpha	[gap] Decision: does the `playstore` flavor use the Play in-app update API
+237	roadmap-gap,should-have,decision-needed	v0.2-alpha	[gap] Decision: Google Sans versus the F-Droid clean rule
+238	roadmap-gap,should-have	v0.2-alpha	[gap] `ReceiptEmailSender` interface and `IntentEmailSender` default
+239	roadmap-gap,should-have	v0.2-alpha	[gap] `SmtpEmailSender`, SMTP settings, retry and failed-send notification
+240	roadmap-gap,should-have	v0.2-alpha	[gap] Payment method configuration UI, custom methods, and the capture-only disclosure
+241	roadmap-gap,should-have	v0.2-alpha	[gap] `AnalyticsAggregator` in `:shared-kmp/domain`
+242	roadmap-gap,should-have	v0.2-alpha	[gap] Feature flag settings screen, Coming soon badges, and flags in backup
+243	roadmap-gap,should-have	v0.2-alpha	[gap] `NtfyBackend` implementation, the server-side ntfy sender, and `docs/setup-ntfy.md`
+244	roadmap-gap,should-have	v0.2-alpha	[gap] Notification backend fallback chain and Android notification plumbing
+245	roadmap-gap,should-have	v0.2-alpha	[gap] TrustedTime integration with a `System.currentTimeMillis()` fallback
+246	roadmap-gap,should-have	v0.2-alpha	[gap] `notification_log` table and notification history
+247	roadmap-gap,should-have	v0.2-alpha	[gap] Database record archival policy for old synced rows
+248	roadmap-gap,should-have	v0.2-alpha	[gap] Bulk sync progress indicator when upgrading from Tier 0
+249	roadmap-gap,should-have	v0.2-alpha	[gap] Design system implementation: colour roles, typography and tokens
+250	roadmap-gap,should-have	v0.2-alpha	[gap] Adaptive layout implementation: size classes, navigation rail, two-pane scaffolds
+251	roadmap-gap,should-have	v0.2-alpha	[gap] Dark mode toggle in Settings
+252	roadmap-gap,should-have	v0.2-alpha	[gap] Accessibility conformance pass
+253	roadmap-gap,should-have	v0.2-alpha	[gap] Module boundary enforcement in the build
+254	roadmap-gap,should-have	v0.2-alpha	[gap] CI checks for licence compatibility, trackers and hardcoded secrets
+255	roadmap-gap,should-have	v0.2-alpha	[gap] Adapter authoring guide for `SyncBackend` and `PaymentGateway` contributors
+256	roadmap-gap,should-have	v0.2-alpha	[gap] Reference schema files for the Supabase and Appwrite backends
+257	roadmap-gap,should-have	v1.0	[gap] F-Droid submission for v1.0
+258	roadmap-gap,should-have	v1.0	[gap] Google Play Store submission for v1.0
+259	roadmap-gap,must-have,sprint-0	v0.1-alpha	[gap] Set up the GitHub Projects board that ADR-012 specifies
+260	roadmap-gap,must-have,sprint-0	v0.1-alpha	[gap] Write down the definition of done and the column entry criteria

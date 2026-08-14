@@ -20,6 +20,11 @@ android {
 
     flavorDimensions += "distribution"
     productFlavors {
+        // ADR-014: the flavors differ in exactly one thing, how the app is
+        // updated. github self-updates from GitHub Releases, fdroid and
+        // playstore leave it to their store. Anything else that diverges
+        // between them belongs in a flavor source set, not behind a runtime
+        // check, so the F-Droid build cannot carry code it must not ship.
         create("github") {
             dimension = "distribution"
             applicationIdSuffix = ".github"
@@ -31,6 +36,13 @@ android {
         create("playstore") {
             dimension = "distribution"
         }
+    }
+
+    sourceSets {
+        getByName("main") { kotlin.srcDir("src/main/kotlin") }
+        getByName("github") { kotlin.srcDir("src/github/kotlin") }
+        getByName("fdroid") { kotlin.srcDir("src/fdroid/kotlin") }
+        getByName("playstore") { kotlin.srcDir("src/playstore/kotlin") }
     }
 
     buildTypes {
@@ -75,4 +87,9 @@ dependencies {
     
     // DataStore needed for PreferencesModule
     implementation(libs.androidx.datastore.preferences)
+
+    // Sideload updater, github flavor only. Declaring it per flavor is what
+    // keeps a self-update path out of the Play Store build, which Play policy
+    // forbids, and out of the F-Droid build, which does not need it.
+    "githubImplementation"(libs.kmp.app.updater.core)
 }

@@ -9,9 +9,9 @@ import kotlin.test.assertTrue
  * Tests for the LIVE RBAC source of truth: [getDefaultPermissions].
  *
  * SessionManager derives a user's permission set from this extension, so these
- * tests pin the privilege boundaries between the four built-in roles. (Note the
- * separate, unused `RoleDefaults` object references a different, legacy
- * Role/Permission model and is NOT what the app enforces.)
+ * tests pin the privilege boundaries between the four built-in roles. The
+ * legacy `RoleDefaults` object and its parallel Role/Permission enums have been
+ * deleted, so this is now the only definition in the codebase.
  */
 class RolePermissionsTest {
 

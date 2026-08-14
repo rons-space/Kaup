@@ -17,7 +17,7 @@ cloud. Targets retail, F&B, and market stalls in any country.
 **Min SDK**: API 26 | **Target SDK**: latest stable
 **UI**: Jetpack Compose + Material 3 Expressive
 **DI**: Hilt
-**Database**: Room (local, encrypted)
+**Database**: Room (local; at-rest encryption is planned, not yet implemented)
 **Sync**: WorkManager queue → pluggable `SyncBackend` interface
 **Server**: Optional Ktor (self-hosted, Docker Compose)
 **Build flavors**: `github`, `fdroid`, `playstore`
@@ -36,8 +36,9 @@ cloud. Targets retail, F&B, and market stalls in any country.
 :core-ui             → Compose theme, typography, shapes, shared components.
                        Depends on :shared-kmp only.
 
-:core-network        → WorkManager, sync queue, SyncBackend wiring.
-                       Depends on :shared-kmp and :core-data only.
+:core-network        → WorkManager, sync queue, SyncBackend wiring,
+                       notification backends.
+                       Depends on :shared-kmp only.
 
 :feature-auth        → Lock screen, PIN, biometric, RBAC, HOTP, onboarding.
 :feature-pos         → Sale register, cart, payments, receipts, shifts.
@@ -107,7 +108,12 @@ The `fdroid` and `github` build flavors must contain zero proprietary SDKs.
 
 ---
 
-## Pluggable Interfaces (all in :shared-kmp/sync-contracts)
+## Pluggable Interfaces (all in :shared-kmp)
+
+There is no `sync-contracts` source set. The interfaces live under
+`domain/sync`, `domain/notification` and `domain/update`, and their models
+under `models/`. Several ADRs name `sync-contracts`; treat the packages below
+as the real locations.
 
 | Interface | Built-in Default | Purpose |
 |---|---|---|
@@ -133,8 +139,16 @@ if (session.hasPermission(Permission.POS_VOID_TRANSACTION)) {
 Actions that exceed the current user's role require `ManagerApprovalOverlay`,
 which uses HOTP for offline verification — no server call, no internet needed.
 
-Roles and their default permission sets live in `RoleDefaults` in `:shared-kmp`.
-The four built-in roles are: `OWNER`, `MANAGER`, `CASHIER`, `WAITER`.
+Roles and their default permission sets live in `Role.getDefaultPermissions()`
+in `:shared-kmp/domain/models/auth`. The four built-in roles are `OWNER`,
+`MANAGER`, `CASHIER` and `CREW`.
+
+`CREW` is the name ADR-009 settled on, and it is what the code has always
+enforced. This file, the README and the roadmap said `WAITER`, which read as
+restaurant-only for a role that also covers a shop floor assistant.
+
+`MANAGER` holds every permission except the `USERS_*` family: a manager runs
+the store day to day but does not create or delete staff accounts.
 
 ---
 

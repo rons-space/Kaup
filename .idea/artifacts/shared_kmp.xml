@@ -1,8 +1,0 @@
-<component name="ArtifactManager">
-  <artifact type="jar" name="shared-kmp">
-    <output-path>$PROJECT_DIR$/shared-kmp/build/libs</output-path>
-    <root id="archive" name="shared-kmp.jar">
-      <element id="module-output" name="Kaup.shared-kmp.androidMain" />
-    </root>
-  </artifact>
-</component>

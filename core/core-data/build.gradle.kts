@@ -16,6 +16,26 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// kspDebugKotlin and kspReleaseKotlin both run Room's processor over the same
+// main sources, so both export the schema into the single directory configured
+// above. Gradle runs them concurrently, and Room reads an existing schema file
+// before writing to skip the write when the content is unchanged. That read can
+// land in the window where the other task has truncated the file and not yet
+// flushed it, and Room fails the build with "Empty schema file".
+//
+// This is why the dev build broke after the version 5 bump while the identical
+// tree passed on the pull request: the race is timing dependent, so it only
+// bites some of the time. Both tasks produce byte-identical output, so ordering
+// them costs nothing and is not a lost parallelism opportunity.
+//
+// The complete fix is the androidx.room Gradle plugin, which gives each variant
+// its own schema directory and declares it as a real task input and output.
+// That is tracked separately; it is a dependency change, and this file needs to
+// stop failing builds now.
+tasks.matching { it.name == "kspReleaseKotlin" }.configureEach {
+    mustRunAfter("kspDebugKotlin")
+}
+
 dependencies {
     implementation(project(":shared-kmp"))
     
