@@ -80,7 +80,15 @@ None — this module has no database dependency.
 - App theme — color scheme, typography, shape system (Material 3 Expressive)
 - Common UI utilities — keyboard visibility, screen size classes, window insets
 - The `ManagerApprovalOverlay` composable (used by multiple feature modules)
-- The `LockScreen` composable shell (logic owned by `:feature-auth`)
+
+### Does NOT own (settled 2026-08-14, #233)
+- The `LockScreen` composable. This file used to place its shell here with the
+  logic in `:feature-auth`. Nothing outside `:feature-auth` composes the lock
+  screen, so the split bought nothing and cost a round trip through two modules
+  for every change. The boundary rule exists to stop `feature-*` modules
+  depending on each other, and a screen only one feature uses does not test it.
+  `ManagerApprovalOverlay` stays here precisely because POS, inventory and
+  settings all raise it.
 
 ### Does NOT own
 - Any business logic
@@ -145,8 +153,18 @@ repository calls are made.
 - Business logic (belongs in `:shared-kmp`)
 - UI (belongs in `:core-ui` or feature modules)
 - Database schema (belongs in `:core-data`)
-- The `SyncBackend` and `NotificationBackend` interface definitions
-  (those belong in `:shared-kmp/sync-contracts`)
+- The `SyncBackend`, `NotificationBackend` and `UpdateChecker` interface
+  definitions. Those belong in `:shared-kmp`, under `domain/sync`,
+  `domain/notification` and `domain/update`. Note there is no
+  `sync-contracts` source set: CONTEXT.md and several ADRs name one, but the
+  interfaces live in the packages above.
+- `NoSyncBackend`. It is pure no-op logic with a test that runs on every
+  target, so it lives in `:shared-kmp` as ADR-004's built-in default and is
+  provided by `NetworkModule`. The other backends are Android implementations
+  and do belong here.
+- The `github` flavor's `GitHubUpdateChecker`. ADR-014 assigns it here, but
+  `:core-network` is compiled into every flavor, so `kmp-app-updater` would
+  ship in the Play Store build. It lives in `android-app/src/github/` (#236).
 
 ### Permissions checked
 None directly.

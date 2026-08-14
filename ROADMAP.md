@@ -94,7 +94,7 @@ Nothing in v0.2-alpha is started until every Must Have is stable.
 - [ ] PIN entry and validation
 - [ ] Session management — `SessionManager` singleton, `Set<Permission>` loading
 - [ ] Auto-lock idle timeout
-- [ ] Role defaults — Owner, Manager, Cashier, Waiter
+- [ ] Role defaults — Owner, Manager, Cashier, Crew
 - [ ] RBAC permission check helpers — `session.hasPermission()`
 - [ ] Basic onboarding wizard — store name, currency, first Owner account
       (Steps 1–3 of 7; remaining steps unlocked in Should Have)
@@ -405,7 +405,7 @@ operating fully without them. Ordered loosely by community value.
 - [ ] Table creation, renaming, and merge
 - [ ] Order assignment to table
 - [ ] Split bill UI
-- [ ] Waiter role with restricted navigation
+- [ ] Crew role with restricted navigation
 
 ### Ktor Server
 - [ ] Server-side RBAC enforcement (post-v1 security hardening)
@@ -505,7 +505,6 @@ These are unresolved decisions that will need a new ADR before implementation:
 |---|---|
 | Money and tax contract: rounding mode, whether subtotal is presented net or gross, and the negative-quantity policy | `SalesCalculator`, every receipt and report |
 | Conflict resolution policy: stock movements merge commutatively, but mutable records need last-write-wins with a vector clock or per-field merge, and wall-clock skew needs handling | `ConflictResolver`, Tier 1+ sync |
-| Is the fourth role `WAITER` or `CREW`? The documents disagree | `RoleDefaults`, feature-restaurant |
 | Tier 2 and Tier 3 definitions differ between `docs/architecture.md` and `README.md` | Backend tier selection UI |
 | Does the `playstore` flavor use the Play in-app update API, as ADR-014 says, or no in-app update at all, as this file said? | feature-settings, release engineering |
 | Google Sans is specified by the design system but is not freely redistributable, which collides with the F-Droid clean rule | Design system, F-Droid submission |

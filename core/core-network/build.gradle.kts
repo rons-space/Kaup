@@ -14,8 +14,10 @@ android {
 }
 
 dependencies {
+    // CONTEXT.md: core modules may depend on :shared-kmp only. The
+    // :core-data dependency that used to sit here was never imported, and the
+    // sync queue is reached through repository interfaces, not DAOs.
     implementation(project(":shared-kmp"))
-    implementation(project(":core:core-data"))
 
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.hilt.android)
@@ -24,4 +26,5 @@ dependencies {
     ksp(libs.androidx.hilt.compiler)
 
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.datetime)
 }
