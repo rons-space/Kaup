@@ -1,14 +1,14 @@
 package app.kaup.core.data.auth
 
-import android.os.SystemClock
 import androidx.room.withTransaction
 import app.kaup.core.data.KaupDatabase
 import app.kaup.core.data.crypto.HotpSecretUnrecoverableException
-import app.kaup.core.data.crypto.KeystoreManager
+import app.kaup.core.data.crypto.SecretSealer
 import app.kaup.core.data.dao.OverrideLogDao
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.OverrideLogEntity
 import app.kaup.core.data.entities.UserEntity
+import app.kaup.core.data.time.TimeProvider
 import app.kaup.shared.domain.HOTPGenerator
 import app.kaup.shared.domain.auth.AuthorizationPolicy
 import app.kaup.shared.domain.auth.ElevationToken
@@ -77,7 +77,8 @@ class OverrideAuthorizer @Inject constructor(
     private val database: KaupDatabase,
     private val userDao: UserDao,
     private val overrideLogDao: OverrideLogDao,
-    private val keystoreManager: KeystoreManager
+    private val secretSealer: SecretSealer,
+    private val timeProvider: TimeProvider
 ) {
 
     /**
@@ -103,7 +104,7 @@ class OverrideAuthorizer @Inject constructor(
         maxAgeMillis: Long = DEFAULT_GRANT_VALIDITY_MILLIS
     ): Boolean = withContext(Dispatchers.IO) {
         val entry = overrideLogDao.getById(logId) ?: return@withContext false
-        val age = System.currentTimeMillis() - entry.grantedAtEpochMillis
+        val age = timeProvider.epochMillis() - entry.grantedAtEpochMillis
         entry.permission == permission &&
             entry.requestedByUserId == requestedByUserId &&
             age in 0..maxAgeMillis
@@ -145,7 +146,7 @@ class OverrideAuthorizer @Inject constructor(
             return@withContext OverrideResult.ApproverNotPermitted(permission)
         }
 
-        val now = SystemClock.elapsedRealtime()
+        val now = timeProvider.uptimeMillis()
         val lockoutUntil = OverrideThrottlePolicy.resolveLockoutAfterReboot(
             nowUptimeMillis = now,
             storedLockoutUntilUptimeMillis = approver.overrideLockoutUntilUptimeMillis,
@@ -158,7 +159,7 @@ class OverrideAuthorizer @Inject constructor(
         if (remaining > 0L) return@withContext OverrideResult.LockedOut(remaining)
 
         val secret = try {
-            keystoreManager.decrypt(encrypted)
+            secretSealer.decrypt(encrypted)
         } catch (e: HotpSecretUnrecoverableException) {
             return@withContext OverrideResult.Unavailable(
                 e.message ?: "The stored HOTP secret cannot be read"
@@ -250,7 +251,7 @@ class OverrideAuthorizer @Inject constructor(
                     transactionId = transactionId,
                     scope = scope,
                     counterUsed = matchedCounter,
-                    grantedAtEpochMillis = System.currentTimeMillis(),
+                    grantedAtEpochMillis = timeProvider.epochMillis(),
                     locationId = locationId
                 )
             )

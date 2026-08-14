@@ -48,7 +48,7 @@ class HotpSecretUnrecoverableException(
  * that flag would break approvals on a locked screen.
  */
 @Singleton
-class KeystoreManager @Inject constructor() {
+class KeystoreManager @Inject constructor() : SecretSealer {
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private val alias = "KaupHOTPSecretKey"
 
@@ -105,7 +105,7 @@ class KeystoreManager @Inject constructor() {
             }
             .build()
 
-    fun encrypt(data: ByteArray): String {
+    override fun encrypt(data: ByteArray): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrGenerateKey())
         val iv = cipher.iv
@@ -123,7 +123,7 @@ class KeystoreManager @Inject constructor() {
      * @throws HotpSecretUnrecoverableException when the key is gone, the key is
      *   no longer valid, or the stored blob is too short to contain an IV.
      */
-    fun decrypt(encryptedBase64: String): ByteArray {
+    override fun decrypt(encryptedBase64: String): ByteArray {
         val combined = try {
             Base64.decode(encryptedBase64, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {

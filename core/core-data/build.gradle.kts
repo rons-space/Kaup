@@ -18,6 +18,13 @@ android {
         sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
         targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
     }
+
+    // Robolectric needs the merged resources and the manifest to stand up an
+    // Android runtime on the JVM. Without this the tests fail at startup rather
+    // than on an assertion.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 ksp {
@@ -59,4 +66,13 @@ dependencies {
 
     // JSR-330 for @Inject / @Singleton
     implementation(libs.javax.inject)
+
+    // #174. These tests run on the JVM under Robolectric rather than as
+    // instrumented tests, because CI has no emulator: ./gradlew build never
+    // runs connectedAndroidTest, so anything in androidTest would be code that
+    // never executes and therefore never gates anything.
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
