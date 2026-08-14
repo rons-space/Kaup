@@ -48,7 +48,7 @@ jobs:
     # is no shared label to match here. What matters is that the label resolves: a
     # label with no runner behind it leaves this queued forever, and a sync that
     # never runs is indistinguishable from the drift it is meant to catch.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: nscloud-ubuntu-24.04-amd64-8x16
 
     steps:
       - name: Check out full history
