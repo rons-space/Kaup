@@ -129,7 +129,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development setup guide.
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and security policy |
 | [docs/architecture.md](docs/architecture.md) | Data flow, sync lifecycle, auth flow |
 | [docs/modules.md](docs/modules.md) | Every module — what it owns and what it does not |
-| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001 to ADR-018) |
+| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001 to ADR-021) |
 | [docs/personas.md](docs/personas.md) | User personas that drive product decisions |
 | [docs/setup-tier1.md](docs/setup-tier1.md) | Self-hosted Ktor server setup guide |
 | [docs/setup-supabase.md](docs/setup-supabase.md) | Supabase sync backend setup guide |
@@ -158,6 +158,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development setup guide.
 | [ADR-016](docs/adr/ADR-016-multi-location-schema.md) | Multi-location schema from day one |
 | [ADR-017](docs/adr/ADR-017-receipt-email.md) | Receipt email — Android intent default with optional SMTP |
 | [ADR-018](docs/adr/ADR-018-room-migration-strategy.md) | Room database migration strategy |
+| [ADR-019](docs/adr/ADR-019-money-and-rounding-contract.md) | Money representation and rounding contract |
+| [ADR-020](docs/adr/ADR-020-offline-conflict-resolution.md) | Offline conflict resolution policy |
+| [ADR-021](docs/adr/ADR-021-authorization-enforcement-model.md) | Authorization enforcement and manager override model |
 
 ---
 
