@@ -11,6 +11,13 @@ android {
     defaultConfig {
         minSdk = 24
     }
+
+    // #178: see the note in :core-data. Pinned here rather than in a root
+    // subprojects block so each module states its own contract.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
 }
 
 dependencies {

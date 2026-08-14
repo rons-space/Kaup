@@ -10,6 +10,14 @@ android {
     defaultConfig {
         minSdk = 24
     }
+
+    // #178: pin the bytecode level instead of inheriting it from whichever JDK
+    // runs Gradle. Under AGP 9 built-in Kotlin, Kotlin's jvmTarget defaults to
+    // targetCompatibility, so this pins both compilers with one setting.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
 }
 
 ksp {
@@ -50,5 +58,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     // JSR-330 for @Inject / @Singleton
-    implementation("javax.inject:javax.inject:1")
+    implementation(libs.javax.inject)
 }

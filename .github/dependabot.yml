@@ -1,0 +1,43 @@
+# Dependency scanning for #178. The resolved graph was never audited, and the
+# one CVE the code review did find (the stale Ktor 2.3.12 pin, CVE-2024-49580)
+# was found by a human reading the version catalog rather than by any tool.
+#
+# This matters more than it looks right now, because Ktor is coming back:
+# #221 to #224 add the sync server, and the catalog comment where the old pin
+# used to sit explicitly defers the version choice to whoever writes them. When
+# that happens there should already be something watching it.
+#
+# Both ecosystems target dev, not main. main only ever receives promotion merge
+# commits, and a bot opening pull requests against it would break that.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      # CONTRIBUTING.md requires Conventional Commits, and the default
+      # dependabot subject line does not follow them.
+      prefix: "chore"
+    groups:
+      # CI runs a full ./gradlew build with no paths-ignore and no concurrency
+      # group, so every extra pull request is another full Android build.
+      # Grouping the routine version bumps keeps that bill down; anything with a
+      # security advisory still arrives as its own pull request.
+      androidx:
+        patterns:
+          - "androidx.*"
+      kotlin-and-coroutines:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.kotlinx*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
