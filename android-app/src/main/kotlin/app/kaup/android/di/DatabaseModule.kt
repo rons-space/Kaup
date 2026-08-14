@@ -36,6 +36,8 @@ object DatabaseModule {
         // load it for you.
         System.loadLibrary("sqlcipher")
 
+        discardPlaintextDatabase(context)
+
         val builder = Room.databaseBuilder(
             context,
             KaupDatabase::class.java,
@@ -63,6 +65,38 @@ object DatabaseModule {
         }
 
         return builder.build()
+    }
+
+    /**
+     * Deletes a pre-#159 plaintext database so SQLCipher is never handed one.
+     *
+     * ADR-022 chose to adopt encryption inside the ADR-018 Phase 1 window
+     * precisely so that no data migration would be needed. That bargain still
+     * has a step: the plaintext file an existing alpha install already has must
+     * actually be discarded. It is not migrated in place, because converting it
+     * means `sqlcipher_export()` over a database this phase has already
+     * declared disposable.
+     *
+     * Past the window this throws rather than deleting. The file could hold
+     * real unsynced sales by then, and a release that reached that state has a
+     * missing `sqlcipher_export()` migration, not a database to throw away.
+     */
+    private fun discardPlaintextDatabase(context: Context) {
+        if (!PlaintextDatabase.isPlaintext(context.getDatabasePath(DATABASE_NAME))) {
+            return
+        }
+
+        check(AlphaMigrationWindow.permits(BuildConfig.VERSION_NAME)) {
+            "Found an unencrypted database past the ADR-018 Phase 1 window. " +
+                "It needs a real sqlcipher_export() migration, not deletion."
+        }
+
+        // deleteDatabase rather than File.delete: the write-ahead log and
+        // shared-memory sidecars are also plaintext, and a surviving -wal would
+        // both leak the data this is meant to remove and confuse the next open.
+        check(context.deleteDatabase(DATABASE_NAME)) {
+            "Could not delete the unencrypted database at $DATABASE_NAME"
+        }
     }
 
     /**

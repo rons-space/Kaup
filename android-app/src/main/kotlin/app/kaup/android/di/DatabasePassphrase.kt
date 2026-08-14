@@ -70,9 +70,18 @@ class DatabasePassphrase @Inject constructor(
         // Sealed before it is used, and committed synchronously. If the process
         // died between opening an encrypted database and persisting the key
         // that opens it, the data would be unreadable on next launch.
-        preferences.edit()
+        val persisted = preferences.edit()
             .putString(KEY_SEALED_PASSPHRASE, sealer.encrypt(generated))
             .commit()
+
+        // The return value is the whole reason for preferring commit over
+        // apply, so it has to be acted on. Returning a key that was not stored
+        // lets Room create a database only this process can ever read: the next
+        // launch finds no preference, generates a different key, and SQLCipher
+        // cannot open the file. Failing here instead leaves nothing behind and
+        // the next launch simply starts over.
+        check(persisted) { "Could not persist the sealed database passphrase" }
+
         return generated
     }
 

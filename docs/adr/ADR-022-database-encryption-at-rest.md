@@ -60,7 +60,33 @@ down, and re-provisioning one must not touch the other.
 The sealed blob lives in a private `SharedPreferences` file and is committed
 synchronously, before the database is opened. If the process died between
 opening an encrypted database and persisting the key that opens it, the data
-would be unreadable on the next launch.
+would be unreadable on the next launch. A failed commit aborts startup for the
+same reason: a key that was handed to SQLCipher but never stored produces a
+database that only the running process can read.
+
+### The database that is already there
+
+Encryption did not change the filename, so an install that predates it already
+has a plaintext file at the path the encrypted database now wants. Nothing about
+that file announces itself: SQLCipher encrypts page one along with everything
+else, so opening it with a passphrase fails inside the native layer with "file
+is not a database", and Room's destructive fallback cannot rescue it because
+reading `user_version` means opening the database first. Left alone this is a
+crash on every launch of an upgraded device, and the plaintext the encryption
+was adopted to remove stays on disk.
+
+`DatabaseModule` therefore checks for the 16-byte SQLite magic before the first
+encrypted open and deletes the file when it finds it, sidecars included. The
+check reads the header rather than a "we have encrypted this device" preference,
+because a preference records what the app believes and the header records what
+is on disk, and those disagree in exactly the interesting cases: a restored
+backup, a downgrade, cleared app data.
+
+Deletion is only correct inside the Phase 1 window, and that is the same bargain
+made everywhere else in this ADR. Past `v0.2-alpha` finding a plaintext database
+means a release shipped without the `sqlcipher_export()` migration that should
+have converted it, so the code throws and says so instead of destroying sales
+nobody agreed to lose.
 
 ### The zeroing exception
 
@@ -98,7 +124,9 @@ Positive:
 - ADR-021's audit trail gains the file-level integrity it explicitly lacked, and
   the `permissionsOverride` reasoning recorded there ("encryption at rest is the
   real fix") is now backed by something.
-- Adopted inside the destructive window, so no data migration is needed.
+- Adopted inside the destructive window, so no data migration is needed. An
+  existing plaintext database is discarded rather than converted, which is only
+  acceptable because Phase 1 already treats that data as disposable.
 
 Negative:
 
