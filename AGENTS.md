@@ -1,20 +1,29 @@
 # Agent Instructions
 
-Kaup, a free, open-source, offline-first Android POS built with Kotlin Multiplatform,
-Jetpack Compose (Material 3), Hilt and Room, distributed under GPL v3. This file covers
-the conventions that are not discoverable from the code and that cause real damage when
-guessed at. [`CONTEXT.md`](CONTEXT.md) is the primary architecture and conventions
-reference; read it, and read [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) before doing
-anything involving branches or merges.
+Kaup, an offline-first Android point-of-sale application: Kotlin Multiplatform shared
+domain logic, Jetpack Compose and Material 3 on Android, Room, Hilt, and Gradle with a
+version catalog. This file covers the conventions that are **not** discoverable from the
+code and that cause real damage when guessed at.
+
+It deliberately does not repeat what is already written down:
+
+- [`CONTEXT.md`](CONTEXT.md) is the architecture contract: module structure, the three
+  non-negotiables (offline-first, module boundaries, F-Droid clean), RBAC, the sync
+  status lifecycle, database rules, and naming conventions. Read it before writing code.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) covers branch naming, Conventional Commits, and
+  the pull request checklist.
+- [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) covers everything below in more detail.
+  Read it before doing anything involving branches or merges.
 
 ## Branching, in one paragraph
 
-`main` is the default branch and deploys. `dev` is the integration branch. Feature and
-fix branches are cut from `dev` and open pull requests **into `dev`**. Batches of `dev`
-are promoted to `main` through a promotion pull request. A workflow syncs `dev` after
-anything lands on `main`: a promotion is a fast-forward, so the two branches sit at the
-**same commit** between promotions, while a hotfix landing while `dev` has moved on is
-merged down instead and leaves `dev` containing `main` but ahead of it.
+`main` is the default branch. `dev` is the integration branch. Feature and fix branches
+are cut from `dev` and open pull requests **into `dev`**. Batches of `dev` are promoted
+to `main` through a promotion pull request, which is merged as a **merge commit**. A
+workflow then syncs `dev` after anything lands on `main`: after a promotion that sync is a
+fast-forward of `dev` to `main`, so the two branches sit at the **same commit** between
+promotions, while a hotfix landing while `dev` has moved on is merged down instead and
+leaves `dev` containing `main` but ahead of it.
 
 ## Rules that break things if broken
 
@@ -29,12 +38,28 @@ merged down instead and leaves `dev` containing `main` but ahead of it.
 
 ## CI
 
-There is currently no automated test CI in this repository; the only workflow is the
-branch-sync workflow above. Validation of code changes relies on the local Gradle build
-and the `kotlin.test` suites in `commonTest`. Do not assume a green pipeline exists to
-catch mistakes; when CI is added, prefer letting it run the full suite rather than
-treating a local full build as a prerequisite for every change.
+CI is a single workflow, `.github/workflows/android.yml`: JDK 26 (Temurin) running
+`./gradlew build` on every push to `main` and `dev` and on every pull request targeting
+either. There is no `paths-ignore`, so a documentation-only change costs a full build,
+and there is no concurrency group, so every push to an open pull request is another full
+run. Bundle small edits rather than pushing them one at a time.
 
-Match the surrounding code. This repository favours explanatory comments that record
-*why* a non-obvious choice was made, especially in build configuration, migrations and
-test setup. Preserve them, and add to them when the reasoning is not self-evident.
+Do not run the build or the test suite locally to validate a change. Push and let CI do
+it. The Gradle build has toolchain and plugin configuration that is not reproducible in a
+bare environment, so a local failure is weak evidence and a local pass is weaker.
+
+Healing `dev` does not cost a Gradle build: the sync workflow's push uses `GITHUB_TOKEN`,
+which GitHub does not let retrigger workflows, so no `android.yml` run starts even though
+it triggers on pushes to `dev`. The sync job itself still runs, but it is a handful of git
+commands on the smallest useful runner.
+
+## Conventions
+
+- Match the surrounding code. This repository favours explanatory comments that record
+  *why* a non-obvious choice was made, especially in CI configuration, Gradle build
+  files, and anything touching the sync or permission model. Preserve them, and add to
+  them when the reasoning is not self-evident.
+- The rules in `CONTEXT.md` under "What Not to Do" are enforced in review. The ones most
+  often broken by accident: no `feature-*` module may depend on another `feature-*`
+  module, `:shared-kmp` must contain no `android.*` or `androidx.*` imports, and
+  user-facing strings belong in `strings.xml` rather than as Kotlin literals.
