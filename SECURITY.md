@@ -43,17 +43,24 @@ remain anonymous.
 
 Implemented today:
 
-- HOTP secret keys are encrypted with a key held in Android Keystore
+- PINs are stored as PBKDF2 hashes with a per-user random salt, and the
+  iteration count is recorded per credential so the cost can be raised later
+  without invalidating existing PINs
+- PIN entry is rate limited by an escalating lockout that is persisted, so
+  killing the app is not a way to reset the attempt counter
+- HOTP secret keys are encrypted with a key held in Android Keystore, in
+  StrongBox where the hardware provides it
 - Sessions are held in memory only and are never written to disk
 - Platform backup and device-to-device transfer are disabled, so the database
   cannot be extracted through Android's backup mechanism
+- The lock, HOTP provisioning and override code screens set `FLAG_SECURE`, so
+  they cannot be screenshotted or screen-recorded and do not appear in the
+  recent apps preview
 
 Not implemented yet, each tracked by an issue:
 
 | Control | Status |
 |---|---|
-| PIN hashing | Not implemented. The PIN is currently stored and compared in plaintext |
-| PIN rate limiting and lockout | Not implemented |
 | Database encryption at rest | Not implemented. There is no SQLCipher or equivalent in the build |
 | AES-encrypted backups | Not implemented. The backup feature itself does not exist yet |
 | RBAC enforcement | Not implemented. The permission model exists in code but no operation is gated on it |
@@ -85,6 +92,16 @@ what is real today, and the ADRs for the reasoning.
 - Every HOTP code is single-use — consumed immediately on validation
 - All authorization events are written to an audit log
 - See [ADR-005](docs/adr/ADR-005-hotp-offline-authorization.md)
+
+### Screen Capture
+
+- The lock screen, the HOTP provisioning screen and the override code screen
+  set `FLAG_SECURE`
+- This covers screenshots, screen recording, casting, and the thumbnail Android
+  keeps for the recent apps list
+- It is a window flag applied while those screens are composed rather than a
+  manifest-wide setting, because the rest of the app has legitimate reasons to
+  be captured, receipts and reports among them
 
 ### Data at Rest
 
