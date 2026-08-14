@@ -19,10 +19,11 @@ It deliberately does not repeat what is already written down:
 
 `main` is the default branch. `dev` is the integration branch. Feature and fix branches
 are cut from `dev` and open pull requests **into `dev`**. Batches of `dev` are promoted
-to `main` through a promotion pull request. A workflow syncs `dev` after anything lands
-on `main`: a promotion is a fast-forward, so the two branches sit at the **same commit**
-between promotions, while a hotfix landing while `dev` has moved on is merged down
-instead and leaves `dev` containing `main` but ahead of it.
+to `main` through a promotion pull request, which is merged as a **merge commit**. A
+workflow then syncs `dev` after anything lands on `main`: after a promotion that sync is a
+fast-forward of `dev` to `main`, so the two branches sit at the **same commit** between
+promotions, while a hotfix landing while `dev` has moved on is merged down instead and
+leaves `dev` containing `main` but ahead of it.
 
 ## Rules that break things if broken
 
