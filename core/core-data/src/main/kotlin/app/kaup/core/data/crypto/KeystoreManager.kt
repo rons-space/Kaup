@@ -6,6 +6,7 @@ import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import android.util.Base64
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -125,8 +126,10 @@ abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
     }
 
     /**
-     * @throws SealedSecretUnrecoverableException when the key is gone, the key
-     *   is no longer valid, or the stored blob is too short to contain an IV.
+     * @throws SealedSecretUnrecoverableException for every permanent failure:
+     *   the key is gone, the key is no longer valid, or the stored blob is
+     *   malformed, truncated, or fails its authentication tag. Callers can
+     *   recover from this one exception, so nothing else may escape.
      */
     override fun decrypt(encryptedBase64: String): ByteArray {
         val combined = try {
@@ -137,10 +140,12 @@ abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
 
         // A truncated blob would otherwise fail as an index out of bounds from
         // deep inside a copy, which reads like a crash rather than a corrupt
-        // record. GCM_IV_LENGTH + at least a tag has to be present.
-        if (combined.size <= GCM_IV_LENGTH) {
+        // record. An IV and a full tag have to be present: GCM emits the tag
+        // even for empty plaintext, so anything shorter than the two together
+        // cannot be a value this class produced.
+        if (combined.size < GCM_IV_LENGTH + GCM_TAG_LENGTH_BYTES) {
             throw SealedSecretUnrecoverableException(
-                "Sealed value is ${combined.size} bytes, too short to contain an IV"
+                "Sealed value is ${combined.size} bytes, too short to be a sealed secret"
             )
         }
 
@@ -149,8 +154,14 @@ abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
 
         val cipher = Cipher.getInstance(TRANSFORMATION)
         val spec = GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
-        try {
+        // doFinal belongs inside this try, not after it. Callers recover from
+        // SealedSecretUnrecoverableException and nothing else, so an
+        // AEADBadTagException from a corrupted or tampered blob would escape as
+        // an unhandled crash on every launch, taking out the one code path that
+        // knows how to recover from an unreadable secret.
+        return try {
             cipher.init(Cipher.DECRYPT_MODE, getOrGenerateKey(), spec)
+            cipher.doFinal(encrypted)
         } catch (e: KeyPermanentlyInvalidatedException) {
             // The key survived but the conditions it was bound to did not, for
             // example the device's secure lock screen was removed. Nothing can
@@ -160,9 +171,17 @@ abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
                 "The Keystore key $alias was invalidated; anything it sealed is gone",
                 e
             )
+        } catch (e: GeneralSecurityException) {
+            // Every remaining checked failure here is permanent: a bad tag, an
+            // unusable key, an unrecoverable entry. None of them get better on
+            // a retry. Note that ProviderException, which is how a Keystore
+            // daemon failure surfaces, is deliberately not caught: it is a
+            // transient system fault and is not evidence the secret is gone.
+            throw SealedSecretUnrecoverableException(
+                "The value sealed under $alias could not be decrypted",
+                e
+            )
         }
-
-        return cipher.doFinal(encrypted)
     }
 
     private companion object {
@@ -174,6 +193,9 @@ abstract class AndroidKeystoreSealer(private val alias: String) : SecretSealer {
 
         /** GCM authentication tag length, in bits. */
         const val GCM_TAG_LENGTH_BITS = 128
+
+        /** The same tag length in bytes, as it appears in the sealed blob. */
+        const val GCM_TAG_LENGTH_BYTES = GCM_TAG_LENGTH_BITS / 8
     }
 }
 
