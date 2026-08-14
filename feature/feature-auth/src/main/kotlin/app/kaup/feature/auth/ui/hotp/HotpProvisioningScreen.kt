@@ -15,8 +15,9 @@ import app.kaup.core.ui.security.SecureScreen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HotpProvisioningScreen(
-    viewModel: HotpProvisioningViewModel = hiltViewModel(),
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    approvalLogId: String? = null,
+    viewModel: HotpProvisioningViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -94,11 +95,20 @@ fun HotpProvisioningScreen(
                 Spacer(modifier = Modifier.height(48.dp))
                 
                 Button(
-                    onClick = { viewModel.saveAndComplete() },
+                    onClick = { viewModel.saveAndComplete(approvalLogId) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("I have scanned this code on staff devices")
                 }
+            }
+
+            if (state.errorMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = state.errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

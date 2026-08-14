@@ -80,6 +80,35 @@ class OverrideAuthorizer @Inject constructor(
     private val keystoreManager: KeystoreManager
 ) {
 
+    /**
+     * Re-checks that a grant this operation was handed actually exists and
+     * covers what is about to be done.
+     *
+     * This is what makes an approval a capability rather than a boolean the UI
+     * remembered. An operation is given the id of an `override_log` row and
+     * looks it up here, so a screen cannot claim to have been approved, and a
+     * grant for one permission cannot be spent on another.
+     *
+     * [maxAgeMillis] bounds how long a grant can sit unused before the action
+     * it authorised has to be approved again. Wall clock is correct here
+     * because the row's timestamp is wall clock; an operator winding the clock
+     * back can extend this window, which is a fair trade against an audit trail
+     * that has to be comparable across devices, and the code itself was already
+     * consumed either way.
+     */
+    suspend fun verifyGrant(
+        logId: String,
+        permission: Permission,
+        requestedByUserId: String,
+        maxAgeMillis: Long = DEFAULT_GRANT_VALIDITY_MILLIS
+    ): Boolean = withContext(Dispatchers.IO) {
+        val entry = overrideLogDao.getById(logId) ?: return@withContext false
+        val age = System.currentTimeMillis() - entry.grantedAtEpochMillis
+        entry.permission == permission &&
+            entry.requestedByUserId == requestedByUserId &&
+            age in 0..maxAgeMillis
+    }
+
     /** Managers who have a secret provisioned, for the approver picker. */
     suspend fun approversFor(permission: Permission): List<UserEntity> =
         withContext(Dispatchers.IO) {
@@ -248,5 +277,14 @@ class OverrideAuthorizer @Inject constructor(
         }
 
         return OverrideResult.Granted(logId = logId, counterUsed = matchedCounter, token = token)
+    }
+
+    private companion object {
+        /**
+         * How long a specific-action grant stays spendable. Long enough to
+         * finish the thing that was approved, short enough that an approval
+         * obtained this morning cannot be spent this afternoon.
+         */
+        const val DEFAULT_GRANT_VALIDITY_MILLIS = 5 * 60 * 1000L
     }
 }
