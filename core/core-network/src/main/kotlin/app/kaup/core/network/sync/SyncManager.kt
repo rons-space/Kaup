@@ -8,7 +8,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import app.kaup.shared.sync.SyncBackend
+import app.kaup.shared.domain.sync.SyncBackend
+import app.kaup.shared.models.sync.SyncResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -56,11 +57,17 @@ class SyncManager @Inject constructor(
         workManager.enqueue(request)
     }
 
+    /**
+     * Server-First processing: the caller waits for the server to acknowledge
+     * before treating the write as confirmed. Returns false when the backend
+     * is not configured, so the caller falls back to a local write rather than
+     * reporting a confirmation that never happened (ADR-010, #220).
+     */
     suspend fun pushNowServerFirst(): Boolean {
-        // Direct suspension call to block local write operations if server fails
+        if (!syncBackend.isConfigured()) return false
+        // TODO(#175): pass the pending batch once sync_queue exists.
         return try {
-            syncBackend.pushRecords()
-            true
+            syncBackend.pushRecords(emptyList()) is SyncResult.Success
         } catch (e: Exception) {
             false
         }

@@ -50,7 +50,7 @@ stop working the moment your internet drops. Kaup does not.
 - FIFO stock valuation
 
 ### Staff and Security
-- Role-based access control — Owner, Manager, Cashier, Waiter
+- Role-based access control — Owner, Manager, Cashier, Crew
 - Per-user permission overrides
 - PIN and biometric authentication
 - HOTP-based offline manager approval — no internet needed to authorise a

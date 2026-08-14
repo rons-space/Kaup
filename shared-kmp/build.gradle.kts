@@ -20,7 +20,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.core)
             implementation(libs.kotlinx.datetime)
-            implementation(libs.kmp.app.updater.core)
+            // kmp-app-updater is deliberately absent: it used to sit here in
+            // commonMain, which put a sideload updater into the F-Droid and
+            // Play Store builds. It is declared githubImplementation-only in
+            // :android-app now (ADR-014).
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
