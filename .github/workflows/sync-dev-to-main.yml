@@ -1,0 +1,221 @@
+name: Sync dev to main
+
+# `main` is the default branch and receives `dev` in batches through a promotion
+# pull request. Once that promotion merges, `dev` is strictly behind `main` and
+# every later feature branch cut from `dev` starts from stale code. The fix is a
+# fast-forward of `dev` up to `main` after each promotion, which this automates so
+# it is not a manual step anyone has to remember.
+#
+# Why this is safe: neither push below is forced, so git itself refuses anything that
+# is not a fast-forward. The ancestry checks in the script exist to tell the healthy
+# no-op cases apart from the two-sided case and to fail with a useful message, not to
+# make the push safe. Where both branches hold commits the other lacks, which happens
+# when `dev` moves while a promotion is open, `main` is merged into `dev` rather than
+# fast-forwarded. Nothing here can discard a commit.
+#
+# Why this needs a merge commit upstream: a clean fast-forward, leaving `dev` and
+# `main` on the same commit, is only possible because the promotion merge commit
+# carries `dev`'s tip as a parent, which keeps `main` a descendant of `dev`. Squash
+# and rebase rewrite history into commits `dev` has never seen, so `dev` stops being
+# an ancestor and the two-sided path below runs instead: still safe, since nothing is
+# discarded or forced, but it leaves a redundant merge behind rather than parity. Both
+# are disabled on this repository, so the green button can only produce a merge commit.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Only the ref update matters, so this deliberately has no `paths-ignore`: a
+# documentation-only merge moves `main` and leaves `dev` behind exactly like any
+# other merge does.
+
+permissions:
+  contents: write
+
+# Never cancel a sync in flight. A cancelled run leaves `dev` behind with no retry,
+# which is the drift this workflow exists to prevent.
+concurrency:
+  group: sync-dev-to-main
+  cancel-in-progress: false
+
+jobs:
+  fast-forward-dev:
+    name: Fast-forward dev to main
+    # This is currently the only workflow in the repository, so there is no
+    # neighbouring label to match; use a small Blacksmith runner, since the job is
+    # only a handful of git commands. A label with no runner behind it leaves this
+    # queued forever, and a sync that never runs is indistinguishable from the drift
+    # it is meant to catch.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          # Ancestry checks need real history, not a depth-1 cone.
+          fetch-depth: 0
+
+      - name: Fast-forward dev to main
+        run: |
+          set -euo pipefail
+
+          # Every decision below is made from a `dev` tip read moments earlier, so a
+          # push to `dev` in between makes the push here a non-fast-forward and git
+          # rejects it. That is the correct outcome for a single pass, but failing on
+          # it would leave `dev` behind over a lost race, which is the drift this
+          # workflow exists to prevent. So a rejected push refetches `dev` and decides
+          # again from the new tip. A `merged_sha` built from a stale tip is never
+          # reused.
+          #
+          # Bounded, because the only expected cause is one lost race: anything that
+          # survives three attempts is a branch being written continuously and wants a
+          # human rather than a tighter loop.
+          max_attempts=3
+
+          # Read once, deliberately. This run exists to propagate this specific commit,
+          # and if `main` has moved on, that push has its own run queued behind this
+          # one by the concurrency group to carry the rest.
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          echo "main: $main_sha"
+
+          # A merge commit needs an author, and the runner has no identity configured.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            if [ "$attempt" -gt 1 ]; then
+              echo "--- attempt $attempt of $max_attempts"
+            fi
+
+            # `dev` is recreated from `main` if it is missing, which is the correct
+            # starting state for the next batch.
+            if ! git ls-remote --exit-code --heads origin dev >/dev/null 2>&1; then
+              echo "Branch \`dev\` does not exist; creating it at main ($main_sha)."
+              if git push origin "$main_sha:refs/heads/dev"; then
+                echo "Created \`dev\` at \`$main_sha\`." >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              echo "Creation rejected; \`dev\` was created underneath us. Refetching."
+              continue
+            fi
+
+            git fetch --quiet origin dev
+            dev_sha="$(git rev-parse FETCH_HEAD)"
+            echo "dev:    $dev_sha"
+
+            if [ "$main_sha" = "$dev_sha" ]; then
+              echo "Already in sync; nothing to do."
+              echo "\`dev\` already matches \`main\` at \`$main_sha\`." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            # `dev` behind `main`: the promotion case this workflow exists for.
+            if git merge-base --is-ancestor "$dev_sha" "$main_sha"; then
+              behind="$(git rev-list --count "$dev_sha..$main_sha")"
+              echo "dev is $behind commit(s) behind main; fast-forwarding."
+              if git push origin "$main_sha:refs/heads/dev"; then
+                {
+                  echo "Fast-forwarded \`dev\` $behind commit(s) to \`$main_sha\`."
+                  echo ""
+                  echo "\`dev\` and \`main\` are now the same commit."
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              echo "Push rejected; \`dev\` advanced during the check. Refetching."
+              continue
+            fi
+
+            # `dev` already contains `main` and has moved on. Healthy mid-cycle state:
+            # new work has landed on `dev` since the promotion. Fast-forwarding here
+            # would mean rewinding `dev`, so this must stay a no-op.
+            if git merge-base --is-ancestor "$main_sha" "$dev_sha"; then
+              ahead="$(git rev-list --count "$main_sha..$dev_sha")"
+              echo "dev is $ahead commit(s) ahead of main and already contains it; nothing to do."
+              {
+                echo "\`dev\` is $ahead commit(s) ahead of \`main\` and already contains it."
+                echo ""
+                echo "No action taken. New work has landed on \`dev\` since the last promotion."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            # Neither branch contains the other. The benign and much more likely cause
+            # is a push to `dev` while the promotion was open: `dev` then holds work the
+            # promotion never saw, and `main` holds the review commits made on the
+            # promotion branch, so each side has commits the other lacks without anything
+            # having been rewritten. Failing here would leave that state for a human to
+            # merge by hand, so merge `main` into `dev` instead. Nothing is discarded:
+            # the merge keeps `dev`'s tip as its first parent, which also keeps the push
+            # below a fast-forward, so it still needs no force.
+            #
+            # The other cause, a promotion merged with squash or rebase, rewrote `dev`'s
+            # commits into new SHAs. Ancestry cannot tell the two apart, and the outcome
+            # does not reliably separate them either: a squash that reproduces `dev`'s
+            # content exactly merges without conflict, because both sides reach the same
+            # lines. Such a merge is still safe, since nothing is discarded or forced, it
+            # just leaves `dev` ahead rather than equal. What actually prevents that case
+            # is repository configuration: squash and rebase merges are disabled, so the
+            # green button can only produce a merge commit.
+            behind="$(git rev-list --count "$dev_sha..$main_sha")"
+            ahead="$(git rev-list --count "$main_sha..$dev_sha")"
+
+            echo "dev is $behind commit(s) behind and $ahead ahead of main; merging main into dev."
+
+            git checkout --quiet --detach "$dev_sha"
+
+            if ! git merge --no-edit -m "Merge main into dev after promotion" "$main_sha"; then
+              git merge --abort || true
+
+              # The merge conflicted, so reconciling needs a decision this workflow
+              # cannot make. Retrying would only reproduce the same conflict.
+              {
+                echo "## \`dev\` has diverged from \`main\` and will not merge"
+                echo ""
+                echo "- \`main\`: \`$main_sha\`"
+                echo "- \`dev\`: \`$dev_sha\` ($behind behind, $ahead ahead)"
+                echo ""
+                echo "Neither branch is an ancestor of the other, so \`dev\` cannot be"
+                echo "fast-forwarded, and merging \`main\` into it conflicts. This workflow"
+                echo "will not force either one."
+                echo ""
+                echo "Recovering needs a human decision: confirm \`main\` holds everything"
+                echo "\`dev\` had, then reset \`dev\` to \`main\`. If \`dev\` holds work"
+                echo "\`main\` does not, resolve the merge by hand instead."
+              } >> "$GITHUB_STEP_SUMMARY"
+
+              echo "::error title=dev has diverged from main::dev ($dev_sha) is $behind behind and $ahead ahead of main ($main_sha), cannot be fast-forwarded, and conflicts on merge. See the run summary."
+              exit 1
+            fi
+
+            merged_sha="$(git rev-parse HEAD)"
+            echo "Merged cleanly as $merged_sha; pushing to dev."
+            if git push origin "$merged_sha:refs/heads/dev"; then
+              {
+                echo "\`dev\` had $ahead commit(s) \`main\` did not, so it could not be"
+                echo "fast-forwarded. Merged \`main\` (\`$main_sha\`) into it as \`$merged_sha\`."
+                echo ""
+                echo "The usual cause is work landing on \`dev\` while the promotion pull"
+                echo "request was open. Nothing was discarded and nothing was forced."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "Push rejected; \`dev\` advanced during the merge. Discarding $merged_sha and refetching."
+          done
+
+          # Every attempt lost the race, so `dev` is being pushed to faster than this
+          # can react. Nothing is broken and nothing was forced, but `dev` is still
+          # behind, so say so rather than exiting green on work that did not happen.
+          {
+            echo "## Could not sync \`dev\` after $max_attempts attempts"
+            echo ""
+            echo "Every push was rejected because \`dev\` advanced first, so \`main\`"
+            echo "(\`$main_sha\`) has not reached it yet."
+            echo ""
+            echo "Nothing was discarded and nothing was forced. Re-running this workflow"
+            echo "is safe and is usually enough once the pushes to \`dev\` settle."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error title=Could not sync dev::Lost the race with a concurrent push to dev $max_attempts times. Re-run when pushes settle."
+          exit 1
