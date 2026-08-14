@@ -50,8 +50,11 @@ abstract class KaupDatabase : RoomDatabase() {
          *   5  syncStatus on every entity, locationId on users, hashed PIN
          *      columns and lockout state, stock movements reconciled with the
          *      domain model (typed movement, direction, transactionId)
+         *   6  stock_movements.quantity moves from REAL to INTEGER
+         *      thousandths (ADR-020), so replaying the log stops
+         *      accumulating float drift
          */
-        const val DATABASE_VERSION: Int = 5
+        const val DATABASE_VERSION: Int = 6
 
         /**
          * ADR-018 Phase 1: alpha builds recreate the database instead of

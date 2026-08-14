@@ -27,7 +27,7 @@ writes a `StockMovement` record:
 StockMovement(
     itemId        : String,
     type          : SALE | RECEIVING | TRANSFER | ADJUSTMENT,
-    quantity      : BigDecimal,
+    quantity      : BigDecimal,   // refined to a scaled integer by ADR-020
     direction     : IN | OUT,
     transactionId : String,
     deviceId      : String,
@@ -38,6 +38,11 @@ StockMovement(
 
 The current stock level for display is computed by aggregating movements:
 `currentStock = Σ(IN quantities) - Σ(OUT quantities)`
+
+ADR-020 refines `quantity` to `Quantity`, a scaled integer of thousandths of a
+unit: the Kotlin common standard library has no `BigDecimal`, and this sum runs
+over a log that only grows, so binary floating point would drift. It also
+settles what happens when two devices disagree, which this ADR leaves open.
 
 A denormalized `currentStock` column is maintained on each write for display
 performance. The movement log remains the authoritative source of truth.

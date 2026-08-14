@@ -31,7 +31,13 @@ data class StockMovement(
     val itemId: String,
     val type: MovementType,
     val direction: MovementDirection,
-    val quantity: Double,
+    /**
+     * Always positive: which way stock moves is [direction]'s job, not the
+     * sign's. A negative quantity paired with an OUT direction would mean the
+     * same thing as a positive IN, and the replay would have two encodings for
+     * one fact.
+     */
+    val quantity: Quantity,
     val transactionId: String?,
     val deviceId: String,
     val timestamp: Instant,
