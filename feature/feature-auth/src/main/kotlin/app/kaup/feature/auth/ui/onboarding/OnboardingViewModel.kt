@@ -2,7 +2,10 @@ package app.kaup.feature.auth.ui.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.kaup.core.data.auth.PinAuthenticator
+import app.kaup.core.data.dao.LocationDao
 import app.kaup.core.data.dao.UserDao
+import app.kaup.core.data.entities.LocationEntity
 import app.kaup.core.data.entities.UserEntity
 import app.kaup.core.data.preferences.StorePreferences
 import app.kaup.shared.domain.auth.PinPolicy
@@ -37,6 +40,8 @@ data class OnboardingUiState(
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val userDao: UserDao,
+    private val locationDao: LocationDao,
+    private val pinAuthenticator: PinAuthenticator,
     private val storePreferences: StorePreferences
 ) : ViewModel() {
 
@@ -88,16 +93,23 @@ class OnboardingViewModel @Inject constructor(
                 currency = state.currency
             )
             
-            // 2. Create the first OWNER user
-            val owner = UserEntity(
-                id = java.util.UUID.randomUUID().toString(),
-                name = state.ownerName,
-                pinHash = state.ownerPin, // Note: In production, hash this properly
-                role = Role.OWNER
-            )
-            
-            // Shift to IO thread to avoid Main thread blocking without hitting Room's KSP suspend bug
+            // 2. Create the first OWNER user.
+            // Shift to IO to avoid blocking the main thread, and because
+            // deriving the PIN hash is deliberately expensive.
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val credential = pinAuthenticator.newCredential(state.ownerPin)
+                val owner = UserEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = state.ownerName,
+                    role = Role.OWNER,
+                    // Seeded by the database callback before anything else can
+                    // be written, so this is present on a fresh install.
+                    locationId = locationDao.getDefaultLocationOnce()?.id
+                        ?: LocationEntity.DEFAULT_ID,
+                    pinHash = credential.hash,
+                    pinSalt = credential.salt,
+                    pinIterations = credential.iterations
+                )
                 userDao.insertUser(owner)
             }
             
