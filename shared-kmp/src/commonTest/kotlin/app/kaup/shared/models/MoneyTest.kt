@@ -2,13 +2,14 @@ package app.kaup.shared.models
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
  * Tests for the [Money] value class, the integer-minor-units type that all POS
- * money math is built on. These pin the arithmetic and ordering behavior so a
- * future refactor (e.g. adding overflow-checked operators) is intentional.
+ * money math is built on. These pin the arithmetic and ordering behaviour,
+ * including the ADR-019 rule that overflow throws instead of wrapping.
  */
 class MoneyTest {
 
@@ -63,9 +64,31 @@ class MoneyTest {
     }
 
     @Test
-    fun `NOTE arithmetic is unchecked and can overflow Long`() {
-        // Documents the review finding: operators use raw Long math with no
-        // overflow guard, so extreme values wrap around silently.
-        assertEquals(Money(Long.MIN_VALUE), Money(Long.MAX_VALUE) + Money(1L))
+    fun `plus throws rather than wrapping past the maximum`() {
+        assertFailsWith<ArithmeticException> { Money(Long.MAX_VALUE) + Money(1L) }
+    }
+
+    @Test
+    fun `minus throws rather than wrapping past the minimum`() {
+        assertFailsWith<ArithmeticException> { Money(Long.MIN_VALUE) - Money(1L) }
+    }
+
+    @Test
+    fun `times throws rather than wrapping`() {
+        assertFailsWith<ArithmeticException> { Money(Long.MAX_VALUE) * 2 }
+        assertFailsWith<ArithmeticException> { Money(Long.MIN_VALUE) * -1L }
+    }
+
+    @Test
+    fun `unary minus negates and refuses the one value with no counterpart`() {
+        assertEquals(Money(-1000L), -Money(1000L))
+        assertEquals(Money(1000L), -Money(-1000L))
+        assertFailsWith<ArithmeticException> { -Money(Long.MIN_VALUE) }
+    }
+
+    @Test
+    fun `arithmetic near the bounds still works when it fits`() {
+        assertEquals(Money(Long.MAX_VALUE), Money(Long.MAX_VALUE - 1L) + Money(1L))
+        assertEquals(Money(Long.MIN_VALUE), Money(Long.MIN_VALUE + 1L) - Money(1L))
     }
 }
