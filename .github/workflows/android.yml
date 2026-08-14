@@ -41,3 +41,24 @@ jobs:
         name: room-schemas
         path: core/core-data/schemas/
         if-no-files-found: warn
+
+    # ADR-018 says the exported schema for every DATABASE_VERSION is committed,
+    # and nothing was checking it. Version 5 was bumped without its schema file
+    # and CI stayed green, because the build writes the file it needs into the
+    # working tree and never compares it against what is in git. The build above
+    # has just regenerated the schemas, so an unclean tree here means either the
+    # version was bumped without committing the export, or an entity changed
+    # without bumping the version. The artifact uploaded above carries the
+    # generated file, so the fix is to download it and commit it.
+    # git status rather than git diff: a version bump writes a brand new file,
+    # which is untracked, and git diff only reports changes to tracked files.
+    # The missing 5.json was exactly that case, so the weaker check would have
+    # let it through again.
+    - name: Verify exported Room schemas are committed
+      run: |
+        changes="$(git status --porcelain -- core/core-data/schemas/)"
+        if [ -n "$changes" ]; then
+          echo "$changes"
+          echo "::error::Exported Room schemas differ from the committed ones. Download the room-schemas artifact from this run and commit it. See ADR-018."
+          exit 1
+        fi
