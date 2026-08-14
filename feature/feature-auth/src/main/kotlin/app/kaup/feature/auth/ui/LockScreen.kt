@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import app.kaup.core.data.entities.UserEntity
+import app.kaup.shared.domain.auth.PinPolicy
 import kotlinx.coroutines.delay
 
 @Composable
@@ -76,19 +77,23 @@ fun PinEntryScreen(
 ) {
     var pin by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
 
-    // Check PIN when length is 4
-    LaunchedEffect(pin) {
-        if (pin.length == 4) {
-            if (pin == user.pinHash) {
-                onSuccess()
-            } else {
-                isError = true
-                delay(500)
-                pin = ""
-                isError = false
-            }
+    // Evaluation is triggered by the confirm action, never by PIN length.
+    // Submitting at a fixed length made every PIN longer than that length
+    // impossible to enter, which locked the owner out of the app.
+    LaunchedEffect(submitted) {
+        if (!submitted) return@LaunchedEffect
+        // TODO(#158): compare against a hashed credential, in a repository.
+        if (pin == user.pinHash) {
+            onSuccess()
+        } else {
+            isError = true
+            delay(500)
+            pin = ""
+            isError = false
         }
+        submitted = false
     }
 
     Column(
@@ -127,7 +132,7 @@ fun PinEntryScreen(
 
         // PIN Dots
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            for (i in 0 until 4) {
+            for (i in 0 until PinPolicy.MAX_ENTRY_LENGTH) {
                 val isFilled = i < pin.length
                 Box(
                     modifier = Modifier
@@ -189,7 +194,7 @@ fun PinEntryScreen(
                         modifier = Modifier
                             .size(72.dp)
                             .clickable {
-                                if (pin.length < 4) pin += key
+                                if (PinPolicy.canAppend(pin)) pin += key
                             }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -202,6 +207,18 @@ fun PinEntryScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = { submitted = true },
+            enabled = PinPolicy.isSubmittable(pin) && !submitted,
+            modifier = Modifier
+                .width(280.dp)
+                .height(56.dp)
+        ) {
+            Text("Unlock", style = MaterialTheme.typography.titleMedium)
         }
 
         Spacer(modifier = Modifier.weight(1f))

@@ -4,7 +4,9 @@ kotlin = "2.1.0"
 ksp = "2.1.0-1.0.29"
 compose-bom = "2024.09.02"
 coroutines = "1.9.0"
-ktor = "2.3.12"
+# No ktor version is pinned here on purpose. Nothing depends on Ktor yet, and
+# the stale 2.3.12 pin that used to sit here is affected by CVE-2024-49580.
+# Whoever adds the Ktor client or the server module pins a current version then.
 room = "2.6.1"
 hilt = "2.59.2"
 workmanager = "2.9.1"

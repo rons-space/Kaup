@@ -1,14 +1,42 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.kts.
+# R8 rules for the release build.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# The release build type sets isMinifyEnabled = true and names this file, so
+# without it `assembleRelease` fails outright. Keep the rules narrow: anything
+# reached only by reflection has to be listed, everything else should shrink.
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Room generates implementations that reference the entity and DAO types by
+# name, and the generated code is loaded reflectively from the database class.
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep @androidx.room.Entity class * { *; }
+-keep @androidx.room.Dao interface * { *; }
+-dontwarn androidx.room.paging.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Type converters resolve enum constants by name (see RoleConverter and the
+# SyncStatus converter), so the constants must survive obfuscation.
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+    **[] $VALUES;
+    public *;
+}
+
+# kotlinx.serialization keeps its generated serializers in companion objects
+# that are only reached reflectively.
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.**
+-keepclassmembers class **$$serializer { *; }
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Hilt and Dagger generate components that are looked up by name at runtime.
+-keep class dagger.hilt.** { *; }
+-keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager { *; }
+
+# WorkManager instantiates workers by class name from the enqueued request.
+-keep class * extends androidx.work.ListenableWorker { <init>(...); }
+
+# Keep source file and line numbers so release crash reports stay readable,
+# but rename the source file attribute so it does not leak the original paths.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
