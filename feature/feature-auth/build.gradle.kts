@@ -13,6 +13,12 @@ android {
         minSdk = 24
     }
 
+    // #178: see the note in :core-data.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
+
     buildFeatures {
         compose = true
     }
@@ -31,8 +37,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     
-    // We will use literal strings for navigation integration dependencies for now
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.zxing.core)
 }

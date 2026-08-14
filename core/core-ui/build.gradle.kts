@@ -11,6 +11,12 @@ android {
         minSdk = 24
     }
 
+    // #178: see the note in :core-data.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
+
     buildFeatures {
         compose = true
     }

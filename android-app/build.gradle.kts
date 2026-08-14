@@ -18,6 +18,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // #178: see the note in :core-data.
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.javaTarget.get())
+    }
+
     flavorDimensions += "distribution"
     productFlavors {
         // ADR-014: the flavors differ in exactly one thing, how the app is
@@ -75,7 +81,7 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     
     implementation(libs.androidx.work.runtime.ktx)
