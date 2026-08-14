@@ -42,11 +42,12 @@ concurrency:
 jobs:
   fast-forward-dev:
     name: Fast-forward dev to main
-    # This is currently the only workflow in the repository, so there is no
-    # neighbouring label to match; use a small Blacksmith runner, since the job is
-    # only a handful of git commands. A label with no runner behind it leaves this
-    # queued forever, and a sync that never runs is indistinguishable from the drift
-    # it is meant to catch.
+    # A Blacksmith runner, deliberately the smallest useful tier: this job runs a
+    # handful of git commands and never builds anything. The other workflow in this
+    # repository (`android.yml`) still uses a GitHub-hosted `ubuntu-latest`, so there
+    # is no shared label to match here. What matters is that the label resolves: a
+    # label with no runner behind it leaves this queued forever, and a sync that
+    # never runs is indistinguishable from the drift it is meant to catch.
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:

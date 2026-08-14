@@ -26,9 +26,8 @@ graph LR
   M -.->|automatic fast-forward| D
 ```
 
-`main` is the default branch and what deploys. `dev` is the integration branch where
-day to day work lands. Batches of `dev` are promoted to `main` through a single
-promotion pull request.
+`main` is the default branch. `dev` is the integration branch where day to day work
+lands. Batches of `dev` are promoted to `main` through a single promotion pull request.
 
 The dotted line is the part people miss. After anything lands on `main`, the sync
 workflow brings `dev` back up to it, and in the promotion case that is a fast-forward
@@ -64,31 +63,38 @@ meant remembering it, and it was forgotten.
 Why it matters: a promotion leaves `dev` strictly behind `main`. Every branch cut from
 `dev` after that starts from stale code, and the next promotion re-proposes commits that
 are already on `main`. Left alone, the two branches drift until the promotion diff stops
-being reviewable. Measured on a real promotion in the repository this model came from:
-`dev` ended up **37 commits behind**.
+being reviewable.
+
+This is not hypothetical here. Immediately before this workflow was adopted, the
+promotion in `#152` had left `dev` **4 commits behind** `main` with no automatic way
+back. On the repository this model came from, the same drift was measured at **37
+commits behind** after a single promotion.
 
 ## Merge method is load-bearing
 
 Promotion pull requests must be merged with **"Create a merge commit"**. Not "Squash and
 merge", not "Rebase and merge".
 
-A merge commit has two parents, and one of them is the tip of `dev`:
+A merge commit has two parents, and one of them is the tip of `dev`. The most recent
+promotion on this repository:
 
 ```text
-f0bc1f1 parents=91e0c25 daa7faf
-  Merge pull request #46 from rons-space/release/promote-dev-YYYY-MM-DD
+ea77af4 parents=3bc8620 d1240c3
+  Merge pull request #152 from rons-space/dev
 ```
 
-Because `dev`'s tip is an ancestor of `main`, `dev` can be **fast-forwarded** to `main`.
-No force push, no history rewriting, nothing discarded. Git itself refuses anything that
-is not a fast-forward, so the safety does not depend on the workflow being clever.
+`d1240c3` is `dev`'s tip. Because it is an ancestor of `main`, `dev` can be
+**fast-forwarded** to `main`. No force push, no history rewriting, nothing discarded.
+Git itself refuses anything that is not a fast-forward, so the safety does not depend on
+the workflow being clever.
 
 Squash and rebase both replace those commits with new SHAs that `dev` has never seen.
 `dev` stops being an ancestor, the fast-forward becomes impossible, and recovering needs
-a human. A simulated squash of one real promotion in the origin repo left `dev` **23
-behind and 25 ahead**, recoverable only by force pushing.
+a human. Measured on the repository this model came from, a simulated squash of one real
+promotion left `dev` **23 behind and 25 ahead**, recoverable only by force pushing.
 
-This is now enforced by repository settings rather than discipline:
+This is enforced by repository settings rather than discipline. Confirmed on this
+repository at the time of writing:
 
 ```text
 allow_merge_commit  = true
@@ -101,12 +107,12 @@ green button remembers the last method used, so with all three enabled it is gen
 easy to squash a promotion by accident.
 
 Note this constrains promotion and hotfix pull requests, the ones that land on `main`.
-Squashing was disabled repository-wide because the setting is not per-branch.
+Squashing is disabled repository-wide because the setting is not per-branch.
 
 ## The sync workflow
 
 `.github/workflows/sync-dev-to-main.yml` runs on every push to `main` and on manual
-dispatch. It compares the two branches and picks one of four outcomes:
+dispatch. It compares the two branches and picks one of these outcomes:
 
 | State | Action |
 |---|---|
@@ -129,14 +135,17 @@ Two properties worth knowing:
   happen.
 
 The fast-forward push uses `GITHUB_TOKEN`, and GitHub does not let that retrigger
-workflows, so healing `dev` never triggers anything watching `dev` and costs no extra
-run. (This repository has no CI watching `dev` yet regardless; the sync itself is
-triggered by pushes to `main`, not `dev`.)
+workflows, so healing `dev` costs **no extra CI run** even though `android.yml` triggers
+on pushes to `dev`.
 
 If the workflow fails, read the run summary before touching anything. It states both
 SHAs, how far apart they are, and which case it hit.
 
 ## Everyday flows
+
+Branch name prefixes are the ones in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md#branch-naming): `feat/`, `fix/`, `docs/`,
+`test/`, `refactor/`, `chore/`.
 
 ### Feature or fix
 
@@ -153,15 +162,24 @@ Base it on `dev`, target `dev`. Any merge method is fine here, since these do no
 
 ### Promotion
 
+This repository promotes by opening a pull request from `dev` straight into `main`, which
+is what `#152` was:
+
 ```bash
 git fetch origin
-git checkout -b release/promote-dev-YYYY-MM-DD origin/dev
-git push -u origin release/promote-dev-YYYY-MM-DD
-# open a PR into main
+gh pr create --base main --head dev --title "Promote dev to main"
 ```
 
-Merge it with **Create a merge commit**. The sync workflow fast-forwards `dev` on that
-merge, and the branches are back at parity within seconds.
+If the batch needs review commits that you would rather not put on `dev` directly, cut a
+promotion branch from `dev` instead and target `main` with that:
+
+```bash
+git checkout -b release/promote-dev-YYYY-MM-DD origin/dev
+git push -u origin release/promote-dev-YYYY-MM-DD
+```
+
+Either way, merge it with **Create a merge commit**. The sync workflow fast-forwards
+`dev` on that merge, and the branches are back at parity within seconds.
 
 ### Hotfix
 
@@ -170,8 +188,26 @@ carries the fix down to `dev` on the same push, so there is no separate step and
 of the fix being lost at the next promotion.
 
 ```bash
-git checkout -b hotfix/urgent-thing origin/main
+git checkout -b fix/urgent-thing origin/main
 ```
+
+## CI cost rules
+
+CI is one workflow, `.github/workflows/android.yml`. It runs `./gradlew build` on every
+push to `main` and `dev`, and on every pull request targeting either. Two consequences
+worth knowing before you push:
+
+- **There is no `paths-ignore`.** A documentation-only change costs a full Gradle build,
+  the same as a source change. Prefer bundling small comment-only or docs-only edits with
+  real work rather than spending a run on them on their own. If docs churn becomes a
+  regular cost, adding `paths-ignore` for `**.md` and `docs/**` to `android.yml` is the
+  fix, but it is not there today.
+- **Avoid pushing many small commits to an open pull request.** Each push is a full run,
+  and there is no concurrency group cancelling the superseded ones.
+
+The sync workflow itself is deliberately exempt from this reasoning: it has no
+`paths-ignore` because a documentation-only merge moves `main` and leaves `dev` behind
+exactly like any other merge does.
 
 ## Verification cheatsheet
 
