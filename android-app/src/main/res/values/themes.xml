@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The application theme, replacing @android:style/Theme.NoTitleBar.
+
+      It parents a platform theme rather than an AppCompat or Material
+      Components one because the app has neither dependency: MainActivity is a
+      ComponentActivity and every pixel after the first frame is drawn by
+      Compose. The XML theme therefore has one job, which is to make the window
+      look right before Compose has drawn anything.
+
+      Bar colours are left alone on purpose. MainActivity calls
+      enableEdgeToEdge(), which sets them itself, and duplicating that here
+      would give two places to change and one of them would be missed.
+    -->
+    <style name="Theme.Kaup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

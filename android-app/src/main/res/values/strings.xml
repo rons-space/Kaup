@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The launcher label. It was an android:label literal in the manifest,
+      which is the one user-facing string that cannot be translated from
+      Kotlin.
+
+      Screen copy is still hardcoded across the feature modules; moving it is
+      tracked as its own piece of work (#189) because it touches every screen
+      and would bury the security changes this file arrived with.
+    -->
+    <string name="app_name">Kaup</string>
+</resources>
