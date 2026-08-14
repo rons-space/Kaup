@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import app.kaup.android.BuildConfig
 import app.kaup.core.data.KaupDatabase
 import app.kaup.core.data.dao.ItemDao
 import app.kaup.core.data.dao.LocationDao
@@ -34,7 +35,16 @@ object DatabaseModule {
             "kaup_database"
         ).addCallback(SeedDefaultLocation)
 
-        if (KaupDatabase.ALPHA_DESTRUCTIVE_MIGRATION) {
+        // Two conditions, not one (#203). The constant is the intent, declared
+        // next to the schema it applies to. The version check is the guardrail:
+        // ADR-018 ends Phase 1 at v0.2-alpha, and if the constant is ever left
+        // set past that point this stops the fallback arming anyway, so Room
+        // reports a missing migration rather than wiping a real store's data.
+        // AlphaMigrationWindowTest fails the build first, but a guardrail that
+        // only exists in CI is not a guardrail.
+        if (KaupDatabase.ALPHA_DESTRUCTIVE_MIGRATION &&
+            AlphaMigrationWindow.permits(BuildConfig.VERSION_NAME)
+        ) {
             @Suppress("DEPRECATION")
             builder.fallbackToDestructiveMigration()
         }

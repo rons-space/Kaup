@@ -46,6 +46,7 @@ android {
 
     sourceSets {
         getByName("main") { kotlin.srcDir("src/main/kotlin") }
+        getByName("test") { kotlin.srcDir("src/test/kotlin") }
         getByName("github") { kotlin.srcDir("src/github/kotlin") }
         getByName("fdroid") { kotlin.srcDir("src/fdroid/kotlin") }
         getByName("playstore") { kotlin.srcDir("src/playstore/kotlin") }
@@ -60,6 +61,10 @@ android {
 
     buildFeatures {
         compose = true
+        // Needed by the #203 guardrail: DatabaseModule compares
+        // BuildConfig.VERSION_NAME against the ADR-018 Phase 1 window before
+        // arming the destructive fallback.
+        buildConfig = true
     }
 }
 
@@ -93,6 +98,8 @@ dependencies {
     
     // DataStore needed for PreferencesModule
     implementation(libs.androidx.datastore.preferences)
+
+    testImplementation(libs.junit)
 
     // Sideload updater, github flavor only. Declaring it per flavor is what
     // keeps a self-update path out of the Play Store build, which Play policy
