@@ -106,9 +106,18 @@ log that only grows.
   none yet.
 - Divergent duplicates need somewhere to go. Until the notification work lands
   they are only returned; ADR-011's manager notification is the intended home.
-- The `stock_movements.quantity` column changes from `REAL` to `INTEGER`. That
-  is a schema change, and ADR-018 requires it to land before `v0.2-alpha` closes
-  the destructive migration window.
+- The `stock_movements.quantity` REAL column becomes an INTEGER
+  `quantityThousandths`. That is a schema change, and ADR-018 requires it to
+  land before `v0.2-alpha` closes the destructive migration window.
+- The entity stores the raw `Long`, not a `Quantity`. Room maps a value class by
+  unwrapping its single underlying property, and `Quantity` has `isNegative` and
+  `isZero` alongside `thousandths`, which makes that unwrapping ambiguous and
+  fails the build with `List has more than one element`. Crippling the domain
+  type to suit the ORM would be the wrong trade, and the entity already stores
+  `timestamp` as an epoch `Long` rather than an `Instant`, so it is the
+  persistence shape rather than the domain one. The unit is in the column name
+  because a bare `Long` called `quantity` is the exact ambiguity this ADR is
+  about: `SELECT SUM(quantity)` would silently return thousandths.
 - `LineItem.quantity` on the sale side stays a `Double` for now, as ADR-019
   noted. It is the last one, and moving it lets the line extension be computed
   in exact integer arithmetic.

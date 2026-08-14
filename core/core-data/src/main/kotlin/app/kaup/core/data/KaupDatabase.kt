@@ -6,7 +6,6 @@ import androidx.room.TypeConverters
 import app.kaup.core.data.converters.MovementDirectionConverter
 import app.kaup.core.data.converters.MovementTypeConverter
 import app.kaup.core.data.converters.PermissionSetConverter
-import app.kaup.core.data.converters.QuantityConverter
 import app.kaup.core.data.converters.RoleConverter
 import app.kaup.core.data.converters.SyncStatusConverter
 import app.kaup.core.data.dao.ItemDao
@@ -23,8 +22,7 @@ import app.kaup.core.data.entities.UserEntity
     PermissionSetConverter::class,
     SyncStatusConverter::class,
     MovementTypeConverter::class,
-    MovementDirectionConverter::class,
-    QuantityConverter::class
+    MovementDirectionConverter::class
 )
 @Database(
     entities = [

@@ -6,7 +6,6 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import app.kaup.shared.models.MovementDirection
 import app.kaup.shared.models.MovementType
-import app.kaup.shared.models.Quantity
 import app.kaup.shared.models.SyncStatus
 
 /**
@@ -45,10 +44,17 @@ data class StockMovementEntity(
     @PrimaryKey val id: String,
     val locationId: String,
     val itemId: String,
-    // Stored as thousandths of a unit via QuantityConverter, so the column is
-    // INTEGER rather than REAL. Stock is a sum over this table, and a REAL
-    // column would reintroduce exactly the drift ADR-020 removes.
-    val quantity: Quantity,
+    // Thousandths of a unit, matching Quantity.SCALE in the domain model. Stock
+    // is a sum over this table, so the column is INTEGER: a REAL would
+    // reintroduce exactly the float drift ADR-020 removes.
+    //
+    // The unit is in the name because the column is a bare Long. Room maps a
+    // value class by unwrapping its single underlying property, and Quantity
+    // has isNegative and isZero alongside thousandths, which makes that
+    // unwrapping ambiguous and fails the build. Storing the primitive here also
+    // matches timestamp, which is an epoch Long rather than an Instant, so the
+    // entity is already the persistence shape rather than the domain one.
+    val quantityThousandths: Long,
     val movementType: MovementType,
     val direction: MovementDirection,
     // Set when the movement was produced by a sale, void or refund. There is no
