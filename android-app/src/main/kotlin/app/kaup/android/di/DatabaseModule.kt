@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import app.kaup.core.data.KaupDatabase
 import app.kaup.core.data.dao.ItemDao
 import app.kaup.core.data.dao.LocationDao
+import app.kaup.core.data.dao.OverrideLogDao
 import app.kaup.core.data.dao.StockMovementDao
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.LocationEntity
@@ -76,4 +77,7 @@ object DatabaseModule {
 
     @Provides
     fun provideUserDao(database: KaupDatabase): UserDao = database.userDao()
+
+    @Provides
+    fun provideOverrideLogDao(database: KaupDatabase): OverrideLogDao = database.overrideLogDao()
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The launcher icon background. Kept here rather than inside the adaptive
+      icon so that the flat pre-API 26 icon and the adaptive one cannot drift
+      apart.
+    -->
+    <color name="ic_launcher_background">#1B5E4A</color>
+
+    <!--
+      Window background, used only for the frame or two between the window
+      opening and Compose drawing. Compose owns every colour after that, so
+      these exist purely to stop that gap flashing white on a dark device, and
+      they track the surface colours in KaupTheme.
+    -->
+    <color name="window_background">#FCFDF9</color>
+    <color name="window_background_dark">#111412</color>
+</resources>

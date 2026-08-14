@@ -2,9 +2,11 @@ package app.kaup.core.data.preferences
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import app.kaup.shared.domain.auth.ElevationTokenPolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,6 +20,8 @@ class StorePreferences(
         val CURRENCY = stringPreferencesKey("currency")
         val AUTO_LOCK_TIMEOUT_MS = longPreferencesKey("auto_lock_timeout_ms")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val ELEVATION_TOKENS_ENABLED = booleanPreferencesKey("elevation_tokens_enabled")
+        val ELEVATION_WINDOW_MS = longPreferencesKey("elevation_window_ms")
     }
 
     val storeName: Flow<String?> = dataStore.data.map { preferences ->
@@ -42,6 +46,45 @@ class StorePreferences(
     suspend fun setAutoLockTimeout(ms: Long) {
         dataStore.edit { preferences ->
             preferences[Keys.AUTO_LOCK_TIMEOUT_MS] = ms
+        }
+    }
+
+    /**
+     * Whether a manager may issue a general elevation token rather than an
+     * approval bound to one action, required as an admin switch by SECURITY.md
+     * and ADR-005.
+     *
+     * Defaults to on because ADR-005 offers both scopes, and the UI warns
+     * before issuing one. A store that decides the convenience is not worth it
+     * turns this off, and ADR-021 has the switch checked at redemption as well
+     * as at issue, so tokens already in flight stop working immediately rather
+     * than lingering for their window.
+     */
+    val elevationTokensEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[Keys.ELEVATION_TOKENS_ENABLED] ?: true
+    }
+
+    suspend fun setElevationTokensEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[Keys.ELEVATION_TOKENS_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * How long an elevation token stays usable, clamped to the ceiling
+     * [ElevationTokenPolicy] enforces so a stored value from an older build, or
+     * an edited preferences file, cannot widen the window past it.
+     */
+    val elevationWindowMs: Flow<Long> = dataStore.data.map { preferences ->
+        val configured = preferences[Keys.ELEVATION_WINDOW_MS]
+            ?: ElevationTokenPolicy.DEFAULT_WINDOW_MILLIS
+        configured.coerceIn(1L, ElevationTokenPolicy.MAX_WINDOW_MILLIS)
+    }
+
+    suspend fun setElevationWindowMs(ms: Long) {
+        dataStore.edit { preferences ->
+            preferences[Keys.ELEVATION_WINDOW_MS] =
+                ms.coerceIn(1L, ElevationTokenPolicy.MAX_WINDOW_MILLIS)
         }
     }
 

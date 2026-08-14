@@ -12,6 +12,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import app.kaup.core.ui.security.SecureScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,6 +21,9 @@ fun OverrideCodeGenerationScreen(
     onBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // The entire content of this screen is a live one-time password.
+    SecureScreen()
 
     Scaffold(
         topBar = {
@@ -41,7 +45,8 @@ fun OverrideCodeGenerationScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "It is valid for a single use and will not expire until consumed.",
+                text = "Single use. Generating another does not cancel this one, " +
+                    "but spending either one cancels the codes before it.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

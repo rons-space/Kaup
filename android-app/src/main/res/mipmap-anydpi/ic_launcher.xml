@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pre-API 26 launcher icon. Adaptive icons only exist from API 26, and minSdk
+  is 24, so API 24 and 25 need a plain drawable under the same resource name.
+  A layer-list of the background colour plus the glyph is the flat equivalent
+  of the adaptive icon next door, and keeps both versions in sync by reusing
+  the same two resources.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>

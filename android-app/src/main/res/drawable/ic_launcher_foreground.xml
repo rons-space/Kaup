@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher icon foreground: a "K" drawn as a single filled polygon.
+
+  Deliberately a vector rather than the usual set of density-scaled PNGs. The
+  app ships through F-Droid, which builds from source, and a binary asset is
+  something a reviewer cannot read in a diff. A vector is also the only way to
+  provide a launcher icon at minSdk 24 without checking in five bitmaps.
+
+  The 108dp canvas is the adaptive icon standard. Only the central 72dp is
+  guaranteed to be visible after the launcher applies its mask, so the glyph
+  sits inside roughly x 35..73 and y 30..78.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,30 L43,30 L43,48 L61,30 L72,30 L51,52 L73,78 L62,78 L43,60 L43,78 L35,78 Z" />
+</vector>
