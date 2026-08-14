@@ -36,12 +36,17 @@ android {
 // Forking just the test JVM onto the toolchain that matches the bytecode target
 // keeps that contained: compilation and the rest of the build stay on 26. The
 // workflow installs both JDKs.
+// Resolved at project scope, not inside configureEach: inside the block
+// `extensions` is the Test task's own container, which holds nothing but extra
+// properties.
+val testJavaLauncher = project.extensions
+    .getByType(JavaToolchainService::class.java)
+    .launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(libs.versions.javaTarget.get()))
+    }
+
 tasks.withType<Test>().configureEach {
-    javaLauncher.set(
-        extensions.getByType(JavaToolchainService::class.java).launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(libs.versions.javaTarget.get()))
-        }
-    )
+    javaLauncher.set(testJavaLauncher)
 }
 
 ksp {
