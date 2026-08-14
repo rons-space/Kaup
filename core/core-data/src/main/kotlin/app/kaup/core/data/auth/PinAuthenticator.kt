@@ -1,9 +1,9 @@
 package app.kaup.core.data.auth
 
-import android.os.SystemClock
 import app.kaup.core.data.crypto.PinHasher
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.entities.UserEntity
+import app.kaup.core.data.time.TimeProvider
 import app.kaup.shared.domain.auth.PinLockoutPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,7 +32,8 @@ sealed interface PinAuthResult {
 @Singleton
 class PinAuthenticator @Inject constructor(
     private val userDao: UserDao,
-    private val pinHasher: PinHasher
+    private val pinHasher: PinHasher,
+    private val timeProvider: TimeProvider
 ) {
 
     suspend fun authenticate(userId: String, pin: String): PinAuthResult =
@@ -40,7 +41,7 @@ class PinAuthenticator @Inject constructor(
             val user = userDao.getUserById(userId)
                 ?: return@withContext PinAuthResult.Failure(PinLockoutPolicy.FREE_ATTEMPTS)
 
-            val now = SystemClock.elapsedRealtime()
+            val now = timeProvider.uptimeMillis()
             val lockoutUntil = PinLockoutPolicy.resolveLockoutAfterReboot(
                 nowUptimeMillis = now,
                 storedLockoutUntilUptimeMillis = user.pinLockoutUntilUptimeMillis,

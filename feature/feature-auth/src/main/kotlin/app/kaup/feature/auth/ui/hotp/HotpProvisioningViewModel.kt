@@ -2,12 +2,12 @@ package app.kaup.feature.auth.ui.hotp
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import android.os.SystemClock
 import app.kaup.core.data.auth.OverrideAuthorizer
 import app.kaup.core.data.auth.SessionManager
-import app.kaup.core.data.crypto.KeystoreManager
+import app.kaup.core.data.crypto.SecretSealer
 import app.kaup.core.data.dao.UserDao
 import app.kaup.core.data.preferences.StorePreferences
+import app.kaup.core.data.time.TimeProvider
 import app.kaup.shared.domain.auth.AuthorizationDecision
 import app.kaup.shared.domain.models.auth.Permission
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,10 +58,11 @@ data class HotpProvisioningState(
 @HiltViewModel
 class HotpProvisioningViewModel @Inject constructor(
     private val sessionManager: SessionManager,
-    private val keystoreManager: KeystoreManager,
+    private val secretSealer: SecretSealer,
     private val overrideAuthorizer: OverrideAuthorizer,
     private val userDao: UserDao,
-    private val storePreferences: StorePreferences
+    private val storePreferences: StorePreferences,
+    private val timeProvider: TimeProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HotpProvisioningState())
@@ -129,7 +130,7 @@ class HotpProvisioningViewModel @Inject constructor(
             }
 
             try {
-                val encrypted = keystoreManager.encrypt(secret)
+                val encrypted = secretSealer.encrypt(secret)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     userDao.updateUserHotp(user.id, encrypted, 0L)
                 }
@@ -152,7 +153,7 @@ class HotpProvisioningViewModel @Inject constructor(
     private suspend fun isAuthorized(userId: String, approvalLogId: String?): Boolean {
         val decision = sessionManager.authorize(
             permission = REQUIRED_PERMISSION,
-            nowUptimeMillis = SystemClock.elapsedRealtime()
+            nowUptimeMillis = timeProvider.uptimeMillis()
         )
         if (decision !is AuthorizationDecision.RequiresManagerApproval) {
             // Granted by the session, or by an elevation token. A token is
