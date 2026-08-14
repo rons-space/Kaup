@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Closes the code review findings that sprints 0 through 2 actually resolved.
+# Closes the code review findings that sprints 0 through 3 actually resolved.
 #
 # Why this script exists: GitHub only auto-closes an issue when the pull request
 # that references it merges into the *default* branch. Every sprint PR targets
@@ -63,13 +63,27 @@ echo "Decisions settled in docs (PR #264)"
 close 233 "Decided in #264: LockScreen stays whole in :feature-auth. Nothing outside that module composes it, so the :core-ui split cost a two-module round trip for nothing. ManagerApprovalOverlay stays in :core-ui because POS, inventory and settings all raise it."
 close 234 "Decided in #264: the fourth role is CREW, matching ADR-009 and the enforced code. CONTEXT.md, README.md and ROADMAP.md were updated from WAITER."
 
+echo "Sprint 3 part one — the money contract (PR #267)"
+close 169 "Fixed in #267: ADR-019 states the money contract, and SalesCalculator now satisfies finalTotal == subtotal - discountTotal + exclusiveTaxTotal exactly. Cart-level amounts are allocated by largest remainder, so per-line tax bases sum to the cart tax base; 12 of 80 carts in the test matrix were previously taxed on a base one minor unit off. Multiple inclusive taxes are extracted once against their combined rate, and rounding is half away from zero so a refund is the exact negation of its sale."
+close 201 "Fixed in #267: Money plus, minus, times and unaryMinus throw ArithmeticException instead of wrapping."
+close 165 "Fixed in #267: gradlew is committed 100755. The sprint 0 chmod +x ran in a sandbox and never reached the git index, and CI masked it with its own chmod step."
+
+echo "Sprint 3 part two — stock and conflicts (PR #268)"
+close 170 "Fixed in #268: stock is a Quantity, a scaled integer of thousandths, and the stock_movements column is INTEGER quantityThousandths. ADR-020 records why a scaled integer replaces ADR-002's BigDecimal, which the Kotlin common standard library does not have."
+close 171 "Fixed in #268: ADR-020 states the policy and ConflictResolver.resolve implements it. Total order by timestamp, deviceId then id; duplicates dropped by id with content divergence surfaced separately; timeline, final stock and violations returned from one replay. No last-write-wins anywhere, because the log is append-only and authoritative."
+close 200 "Fixed in #268: detectNegativeStockViolations returns a StockViolation per movement that leaves stock negative, carrying the level after it and a flag on the first breach. It previously reported only the crossing event, hiding how deep an oversell went."
+
 echo
 echo "Deliberately NOT closed:"
 echo "  #159  the encryption claims were withdrawn, but the database is still"
 echo "        plaintext. There is no SQLCipher anywhere. Real work remains."
-echo "  #165  fixed in the sprint 3 PR, not sprint 0. The earlier chmod +x ran"
-echo "        in a sandbox and never reached the git index."
 echo "  #178  the vulnerable ktor pin is gone and the build is proven green,"
 echo "        but the toolchain skew half of the finding is unreviewed."
 echo "  #203  ALPHA_DESTRUCTIVE_MIGRATION exists with a TODO, but nothing"
-echo "        enforces its removal before v0.2-alpha."
+echo "        enforces its removal before v0.2-alpha. Note the destructive"
+echo "        migration window closes at v0.2-alpha and schema 6 has landed,"
+echo "        so this is now the binding constraint on the next schema change."
+echo
+echo "Still open and worth knowing: #269 moves LineItem.quantity to Quantity,"
+echo "the last Double in the money path. Not a schema change, so it is not"
+echo "gated on the v0.2-alpha migration window."
